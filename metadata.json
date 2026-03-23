@@ -1,0 +1,5 @@
+{
+  "name": "ClaudiaPOS",
+  "description": "Sistema integral de gestión de ventas y administración para PYMES con roles de Super Admin, Dueño y Vendedor.",
+  "requestFramePermissions": []
+}
