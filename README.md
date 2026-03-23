@@ -40,7 +40,7 @@ ClaudiaPOS is a high-performance, aesthetically pleasing **SaaS Point of Sale (P
 1.  **Clone the repository:**
     ```bash
     git clone https://github.com/your-username/claudiapos.git
-    cd claudiapos
+    cd Gestor-Ventas_ClaudiaPos
     ```
 
 2.  **Install dependencies:**
