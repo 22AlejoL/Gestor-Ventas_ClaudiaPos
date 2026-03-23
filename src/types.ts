@@ -29,6 +29,7 @@ export interface Sale {
   items: SaleItem[];
   paymentMethod: 'CASH' | 'CARD' | 'DIGITAL';
   sellerId: string;
+  businessId?: string;
 }
 
 export interface SaleItem {

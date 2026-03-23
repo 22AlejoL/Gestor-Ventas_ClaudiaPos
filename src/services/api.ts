@@ -49,6 +49,7 @@ export const api = {
             total: s.total,
             paymentMethod: s.payment_method,
             sellerId: s.seller_id,
+            businessId: s.business_id,
             items: (s.sale_items || []).map((i: any) => ({
                 productId: i.product_id,
                 quantity: i.quantity,

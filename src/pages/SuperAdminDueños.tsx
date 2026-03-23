@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Settings, X, Search, ShieldBan, ShieldCheck } from 'lucide-react';
+import { Plus, X, ShieldBan, ShieldCheck } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { User } from '../types';
@@ -13,21 +13,14 @@ export default function SuperAdminDueños() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [businessNames, setBusinessNames] = useState<string[]>(['']);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   const fetchOwners = async () => {
     setLoading(true);
-    // Fetch owners
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('role', 'OWNER');
-      
-    // Fetch businesses to count how many belongs to them
-    const { data: businesses } = await supabase
-      .from('businesses')
-      .select('owner_id');
+    const { data: profiles } = await supabase.from('profiles').select('*').eq('role', 'OWNER');
+    const { data: businesses } = await supabase.from('businesses').select('owner_id');
 
     if (profiles) {
       const formatted = profiles.map(p => {
@@ -43,6 +36,21 @@ export default function SuperAdminDueños() {
     fetchOwners();
   }, []);
 
+  const handleAddBusinessField = () => {
+    setBusinessNames([...businessNames, '']);
+  };
+
+  const handleUpdateBusinessName = (index: number, value: string) => {
+    const updated = [...businessNames];
+    updated[index] = value;
+    setBusinessNames(updated);
+  };
+
+  const handleRemoveBusinessField = (index: number) => {
+    const updated = businessNames.filter((_, i) => i !== index);
+    setBusinessNames(updated);
+  };
+
   const handleCreateOwner = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -54,6 +62,13 @@ export default function SuperAdminDueños() {
       return;
     }
 
+    const filteredBusinesses = businessNames.filter(b => b.trim() !== '');
+    if (filteredBusinesses.length === 0) {
+      setError('Debes especificar al menos un nombre de empresa');
+      setSubmitting(false);
+      return;
+    }
+
     const { data: { session } } = await supabase.auth.getSession();
     const { data, error: invokeError } = await supabase.functions.invoke('manage-users', {
       body: { 
@@ -61,7 +76,8 @@ export default function SuperAdminDueños() {
         email, 
         password, 
         name, 
-        role: 'OWNER' 
+        role: 'OWNER',
+        businesses: filteredBusinesses
       },
       headers: {
         Authorization: `Bearer ${session?.access_token}`
@@ -78,6 +94,7 @@ export default function SuperAdminDueños() {
       setName('');
       setEmail('');
       setPassword('');
+      setBusinessNames(['']);
       fetchOwners();
     }
     setSubmitting(false);
@@ -85,7 +102,6 @@ export default function SuperAdminDueños() {
 
   const toggleStatus = async (userId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE';
-    // Optimistic UI
     setOwners(prev => prev.map(o => o.id === userId ? { ...o, status: newStatus } : o));
     
     const { data: { session } } = await supabase.auth.getSession();
@@ -171,7 +187,6 @@ export default function SuperAdminDueños() {
         </div>
       </div>
 
-      {/* Modal Reusable */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden relative animate-in fade-in zoom-in duration-200">
@@ -181,9 +196,9 @@ export default function SuperAdminDueños() {
             >
               <X size={20} />
             </button>
-            <div className="p-8">
+            <div className="p-8 max-h-[90vh] overflow-y-auto">
               <h3 className="text-2xl font-bold text-slate-800 mb-2">Nuevo Dueño</h3>
-              <p className="text-slate-500 mb-6 text-sm">Crea una cuenta para un nuevo emprendedor. Se le asignará una empresa inicial automáticamente.</p>
+              <p className="text-slate-500 mb-6 text-sm">Crea una cuenta para un emprendedor y define sus empresas iniciales.</p>
               
               {error && (
                 <div className="p-3 mb-6 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-sm font-medium">
@@ -226,10 +241,45 @@ export default function SuperAdminDueños() {
                     placeholder="Mínimo 6 caracteres"
                   />
                 </div>
+
+                <div className="pt-4 border-t border-slate-100">
+                  <label className="block text-sm font-bold text-slate-700 mb-3">Empresas Asignadas</label>
+                  <div className="space-y-2">
+                    {businessNames.map((bName, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          required
+                          value={bName}
+                          onChange={e => handleUpdateBusinessName(index, e.target.value)}
+                          className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          placeholder={`Nombre de empresa ${index + 1}`}
+                        />
+                        {businessNames.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveBusinessField(index)}
+                            className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          >
+                            <X size={18} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddBusinessField}
+                    className="mt-3 text-sm font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                  >
+                    <Plus size={16} /> Añadir otra empresa
+                  </button>
+                </div>
+
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full mt-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-70 flex justify-center items-center"
+                  className="w-full mt-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-70 flex justify-center items-center"
                 >
                   {submitting ? (
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

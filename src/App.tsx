@@ -142,7 +142,7 @@ export default function App() {
           {/* Owner Routes */}
           {user.role === 'OWNER' && (
             <>
-              <Route path="/dashboard" element={<OwnerDashboard products={products} />} />
+              <Route path="/dashboard" element={<OwnerDashboard products={products} sales={sales} />} />
               <Route path="/ventas" element={<SellerTerminal products={products} setProducts={handleUpdateProducts} role={user.role} onSaleComplete={handleAddSale} />} />
               <Route path="/reportes" element={<OwnerReports />} />
               <Route path="/inventario" element={<AdminInventory products={products} setProducts={handleUpdateProducts} />} />
