@@ -1,20 +1,81 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# ClaudiaPOS 🚀 - Modern SaaS Point of Sale System
 
-# Run and deploy your AI Studio app
+ClaudiaPOS is a high-performance, aesthetically pleasing **SaaS Point of Sale (POS)** and business management solution. Built with a modern tech stack (React 19 + Vite), it offers a seamless experience for multi-role retail operations, from street-level sellers to regional administrators.
 
-This contains everything you need to run your app locally.
+---
 
-View your app in AI Studio: https://ai.studio/apps/82b4251c-837f-4e27-ac5f-eaa6d5d59723
+## ✨ Key Features
 
-## Run Locally
+- **🛍️ Multi-Role Ecosystem:**
+  - **SELLER:** Fast terminal interface for processing sales (Cash, Card, Digital), cart management, and shift summaries.
+  - **OWNER:** In-depth business health dashboard with interactive charts, performance reports, and inventory control.
+  - **SUPER_ADMIN:** Ecosystem-wide oversight to manage multiple businesses, owners, and system-wide metrics.
+- **📊 Advanced Data Visualization:** Interactive sales trends, payment method breakdowns, and inventory health using `Recharts`.
+- **📦 Inventory Intelligence:** Real-time stock alerts, "unlimited" stock indicators, and easy product editing.
+- **🪄 Premium UI/UX:** Smooth transitions and micro-animations powered by `Framer Motion` (Motion), utilizing a clean `Tailwind CSS 4` design system.
+- **⚡ Built for Speed:** Instant-load performance using `Vite` and `TypeScript` for type-safety across the entire POS flow.
 
-**Prerequisites:**  Node.js
+---
 
+## 🛠️ Tech Stack
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- **Framework:** [React 19](https://react.dev/)
+- **Language:** [TypeScript](https://www.typescriptlang.org/)
+- **Styling:** [Tailwind CSS 4](https://tailwindcss.com/)
+- **Icons:** [Lucide React](https://lucide.dev/)
+- **Animations:** [Motion (Framer Motion)](https://motion.dev/)
+- **Charts:** [Recharts](https://recharts.org/)
+- **Bundler:** [Vite](https://vitejs.dev/)
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (LTS recommended)
+
+### Installation
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/your-username/claudiapos.git
+    cd claudiapos
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+
+3.  **Run in development mode:**
+    ```bash
+    npm run dev
+    ```
+
+---
+
+## 🔐 Authentication (Demo Mode)
+
+Access different views by using the following email patterns in the login screen:
+- **Super Admin:** Any email containing `admin`
+- **Business Owner:** Any email containing `owner`
+- **Seller:** Any other email (default role)
+
+---
+
+## 🏗️ Project Structure
+
+- `src/App.tsx`: Main application monolith containing core views and routing.
+- `src/types.ts`: Core data models and TypeScript definitions.
+- `src/main.tsx`: Application entry point.
+- `tailwind.config.js`: Custom design system configuration.
+
+---
+
+## 🔮 Future Roadmap
+
+- [ ] Transition from Local State to Global State (Zustand/Redux).
+- [ ] Backend integration with Express (already in `package.json`).
+- [ ] Database persistence (PostgreSQL/MongoDB).
+- [ ] AI-powered sales forecasting using Google Gemini (dependency already included).
