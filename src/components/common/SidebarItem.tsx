@@ -9,7 +9,7 @@ interface SidebarItemProps {
   badge?: string;
 }
 
-const SidebarItem = ({ icon: Icon, label, active, onClick, badge }: SidebarItemProps) => (
+const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, active, onClick, badge }) => (
   <button
     onClick={onClick}
     className={cn(

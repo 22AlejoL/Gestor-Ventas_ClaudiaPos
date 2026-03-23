@@ -19,6 +19,7 @@ export interface Product {
   minStock: number;
   image?: string;
   isUnlimited?: boolean;
+  businessId?: string;
 }
 
 export interface Sale {

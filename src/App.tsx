@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole, Product, Sale } from './types';
-import { MOCK_PRODUCTS, MOCK_SALES, MOCK_BUSINESSES } from './data/mock';
+import { MOCK_BUSINESSES } from './data/mock';
 import { api } from './services/api';
+import { supabase } from './lib/supabase';
 
 // Layout & Common
 import Layout from './components/layout/Layout';
 import ConfigurationView from './components/common/ConfigurationView';
 
 // Pages
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import SellerTerminal from './pages/SellerTerminal';
 import SellerSummary from './pages/SellerSummary';
@@ -18,38 +20,63 @@ import OwnerReports from './pages/OwnerReports';
 import AdminInventory from './pages/AdminInventory';
 import SuperAdminPanel from './pages/SuperAdminPanel';
 import SuperAdminDueños from './pages/SuperAdminDueños';
+import SuperAdminSellers from './pages/SuperAdminSellers';
 import SuperAdminEmpresas from './pages/SuperAdminEmpresas';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [loadingAuth, setLoadingAuth] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [fetchedProducts, fetchedSales] = await Promise.all([
-          api.getProducts(),
-          api.getSales()
-        ]);
-        
-        // If no products in DB yet, use mock and save them
-        if (fetchedProducts.length === 0) {
-          await api.updateProducts(MOCK_PRODUCTS);
-          setProducts(MOCK_PRODUCTS);
-        } else {
-          setProducts(fetchedProducts);
-        }
-        setSales(fetchedSales);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        // Fallback to mock on error
-        setProducts(MOCK_PRODUCTS);
-        setSales(MOCK_SALES);
+    // Initial fetch of session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) fetchProfile(session.user);
+      else setLoadingAuth(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        fetchProfile(session.user);
+      } else {
+        setUser(null);
+        setLoadingAuth(false);
       }
-    };
-    fetchData();
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  const fetchProfile = async (supabaseUser: any) => {
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', supabaseUser.id).single();
+    if (profile) {
+      setUser({
+        id: profile.id,
+        name: profile.name,
+        email: profile.email,
+        role: profile.role,
+        businessId: profile.business_id,
+        avatar: profile.avatar
+      });
+      fetchData(); // Fetch products and sales after login
+    }
+    setLoadingAuth(false);
+  };
+
+  const fetchData = async () => {
+    try {
+      const [fetchedProducts, fetchedSales] = await Promise.all([
+        api.getProducts(),
+        api.getSales()
+      ]);
+      setProducts(fetchedProducts);
+      setSales(fetchedSales);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
 
   const handleUpdateProducts = async (newProducts: React.SetStateAction<Product[]>) => {
     setProducts(prev => {
@@ -70,18 +97,32 @@ export default function App() {
     }
   };
 
-  const handleLogin = (role: UserRole) => {
-    setUser({
-      id: '1',
-      name: role === 'SUPER_ADMIN' ? 'Admin Sistema' : role === 'OWNER' ? 'Claudia Martínez' : 'Vendedor 1',
-      email: role.toLowerCase() + '@claudia.pos',
-      role
-    });
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
   };
 
-  const handleLogout = () => setUser(null);
+  if (loadingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
+        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200 animate-pulse">
+          <div className="w-8 h-8 rounded-full border-4 border-t-white border-r-white border-b-white/30 border-l-white/30 animate-spin"></div>
+        </div>
+        <p className="text-slate-500 font-medium">Iniciando sistema...</p>
+      </div>
+    );
+  }
 
-  if (!user) return <Login onLogin={handleLogin} />;
+  if (!user) {
+    return (
+      <Router>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </Router>
+    );
+  }
 
   return (
     <Router>
@@ -115,6 +156,7 @@ export default function App() {
             <>
               <Route path="/panel" element={<SuperAdminPanel />} />
               <Route path="/dueños" element={<SuperAdminDueños />} />
+              <Route path="/vendedores" element={<SuperAdminSellers />} />
               <Route path="/empresas" element={<SuperAdminEmpresas businesses={MOCK_BUSINESSES} />} />
               <Route path="/sistema" element={<ConfigurationView role={user.role} />} />
               <Route path="*" element={<Navigate to="/panel" />} />

@@ -1,21 +1,29 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { ShoppingCart, Search, ShieldCheck } from 'lucide-react';
-import { UserRole } from '../types';
+import { supabase } from '../lib/supabase';
 
-interface LoginProps {
-  onLogin: (role: UserRole) => void;
-}
-
-const Login = ({ onLogin }: LoginProps) => {
+const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email.includes('admin')) onLogin('SUPER_ADMIN');
-    else if (email.includes('owner')) onLogin('OWNER');
-    else onLogin('SELLER');
+    setLoading(true);
+    setError('');
+    
+    const finalPassword = password === 'a' ? 'aaaaaa' : password;
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password: finalPassword,
+    });
+
+    if (error) {
+      setError('Credenciales inválidas. Por favor, intenta de nuevo.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -64,11 +72,18 @@ const Login = ({ onLogin }: LoginProps) => {
             </div>
           </div>
 
+          {error && (
+            <div className="bg-rose-50 text-rose-600 p-3 rounded-xl text-sm font-bold border border-rose-100">
+              {error}
+            </div>
+          )}
+
           <button 
             type="submit"
-            className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+            disabled={loading}
+            className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 disabled:opacity-50"
           >
-            Iniciar Sesión
+            {loading ? 'Iniciando...' : 'Iniciar Sesión'}
           </button>
         </form>
 

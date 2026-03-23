@@ -21,7 +21,7 @@ import SidebarItem from '../common/SidebarItem';
 interface LayoutProps {
   user: User;
   children: React.ReactNode;
-  onLogout: () => void;
+  onLogout: () => void | Promise<void>;
 }
 
 const Layout = ({ user, children, onLogout }: LayoutProps) => {
@@ -46,6 +46,7 @@ const Layout = ({ user, children, onLogout }: LayoutProps) => {
     SUPER_ADMIN: [
       { icon: LayoutDashboard, label: 'Panel General', path: '/panel' },
       { icon: Users, label: 'Dueños', path: '/dueños' },
+      { icon: Users, label: 'Vendedores', path: '/vendedores' },
       { icon: Building2, label: 'Empresas', path: '/empresas' },
       { icon: Settings, label: 'Sistema', path: '/sistema' },
     ]
