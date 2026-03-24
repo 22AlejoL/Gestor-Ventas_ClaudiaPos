@@ -1,13 +1,18 @@
 import React from 'react';
-import { DollarSign, ShoppingCart, TrendingUp, Printer, UserCheck, Wallet, CreditCard, Smartphone } from 'lucide-react';
+import { DollarSign, ShoppingCart, TrendingUp, Printer, UserCheck, Wallet, CreditCard, Smartphone, History } from 'lucide-react';
 import StatCard from '../components/common/StatCard';
-import { Sale } from '../types';
+import { Sale, UserRole } from '../types';
+import SalesHistoryModal from '../components/common/SalesHistoryModal';
 
 interface SellerSummaryProps {
   sales: Sale[];
+  role: UserRole;
+  sellerId: string;
 }
 
-const SellerSummary = ({ sales }: SellerSummaryProps) => {
+const SellerSummary = ({ sales, role, sellerId }: SellerSummaryProps) => {
+  const [showHistoryModal, setShowHistoryModal] = React.useState(false);
+
   const totalVentas = sales.reduce((acc, s) => acc + s.total, 0);
   const ticketPromedio = sales.length > 0 ? totalVentas / sales.length : 0;
 
@@ -39,7 +44,13 @@ const SellerSummary = ({ sales }: SellerSummaryProps) => {
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <h3 className="font-bold text-slate-800">Ventas Recientes</h3>
-          <button className="text-indigo-600 font-bold text-sm hover:underline">Ver todas</button>
+          <button 
+            onClick={() => setShowHistoryModal(true)}
+            className="flex items-center gap-2 text-indigo-600 font-bold text-sm hover:underline"
+          >
+            <History size={16} />
+            Ver todas
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -73,6 +84,15 @@ const SellerSummary = ({ sales }: SellerSummaryProps) => {
           </table>
         </div>
       </div>
+
+      {showHistoryModal && (
+        <SalesHistoryModal 
+          sales={sales} 
+          role={role} 
+          currentSellerId={sellerId}
+          onClose={() => setShowHistoryModal(false)} 
+        />
+      )}
     </div>
   );
 };

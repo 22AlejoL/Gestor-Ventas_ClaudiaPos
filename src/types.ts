@@ -6,6 +6,7 @@ export interface User {
   email: string;
   role: UserRole;
   businessId?: string;
+  businessName?: string;
   avatar?: string;
 }
 
@@ -29,11 +30,13 @@ export interface Sale {
   items: SaleItem[];
   paymentMethod: 'CASH' | 'CARD' | 'DIGITAL';
   sellerId: string;
+  sellerName?: string;
   businessId?: string;
 }
 
 export interface SaleItem {
   productId: string;
+  productName?: string;
   quantity: number;
   price: number;
 }

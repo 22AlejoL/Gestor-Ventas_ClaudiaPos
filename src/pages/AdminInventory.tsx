@@ -1,27 +1,53 @@
 import React, { useState } from 'react';
 import { Package, TrendingUp, AlertCircle, Download, Plus, Search, Edit2, X } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Product } from '../types';
+import { User, Product, Business } from '../types';
 import { cn } from '../lib/utils';
+import { api } from '../services/api';
 import StatCard from '../components/common/StatCard';
 
 interface AdminInventoryProps {
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
+  user: User;
 }
 
-const AdminInventory = ({ products, setProducts }: AdminInventoryProps) => {
+const AdminInventory = ({ products, setProducts, user }: AdminInventoryProps) => {
+  const [businesses, setBusinesses] = useState<Business[]>([]);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  React.useEffect(() => {
+    if (user.role === 'OWNER') {
+      api.getBusinessesByOwner(user.id).then(setBusinesses);
+    }
+  }, [user.id, user.role]);
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
     setIsModalOpen(true);
   };
 
+  const handleAddNew = () => {
+    setEditingProduct({
+      id: crypto.randomUUID(),
+      name: '',
+      category: '',
+      price: 0,
+      cost: 0,
+      stock: 0,
+      minStock: 5,
+      image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=200&h=200',
+      isUnlimited: false
+    });
+    setIsModalOpen(true);
+  };
+
   const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const businessIdInput = formData.get('businessId') as string;
+    
     const updatedProduct: Product = {
       ...editingProduct!,
       name: formData.get('name') as string,
@@ -30,10 +56,17 @@ const AdminInventory = ({ products, setProducts }: AdminInventoryProps) => {
       price: parseFloat(formData.get('price') as string),
       stock: parseInt(formData.get('stock') as string),
       minStock: parseInt(formData.get('minStock') as string),
-      isUnlimited: formData.get('isUnlimited') === 'on'
+      isUnlimited: formData.get('isUnlimited') === 'on',
+      businessId: businessIdInput || editingProduct?.businessId || user.businessId
     };
 
-    setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+    const isNew = !products.some(p => p.id === updatedProduct.id);
+    if (isNew) {
+      setProducts(prev => [updatedProduct, ...prev]);
+    } else {
+      setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+    }
+    
     setIsModalOpen(false);
     setEditingProduct(null);
   };
@@ -50,7 +83,10 @@ const AdminInventory = ({ products, setProducts }: AdminInventoryProps) => {
             <Download size={18} />
             Exportar CSV
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">
+          <button 
+            onClick={handleAddNew}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+          >
             <Plus size={18} />
             Nuevo Producto
           </button>
@@ -146,8 +182,10 @@ const AdminInventory = ({ products, setProducts }: AdminInventoryProps) => {
             className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl"
           >
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="text-xl font-bold text-slate-800">Editar Producto</h3>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-all">
+              <h3 className="text-xl font-bold text-slate-800">
+                {products.some(p => p.id === editingProduct.id) ? 'Editar Producto' : 'Nuevo Producto'}
+              </h3>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-all">
                 <X size={20} />
               </button>
             </div>
@@ -157,6 +195,16 @@ const AdminInventory = ({ products, setProducts }: AdminInventoryProps) => {
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre</label>
                   <input name="name" defaultValue={editingProduct.name} required className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />
                 </div>
+                {businesses.length > 1 && (
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Empresa Destino</label>
+                    <select name="businessId" defaultValue={editingProduct.businessId || user.businessId} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none">
+                      {businesses.map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Categoría</label>
                   <input name="category" defaultValue={editingProduct.category} required className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" />

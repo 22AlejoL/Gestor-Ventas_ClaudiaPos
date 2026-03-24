@@ -2,19 +2,24 @@ import React, { useState } from 'react';
 import { Search, ShoppingCart, Trash2, Minus, Plus, Wallet, CreditCard, Smartphone } from 'lucide-react';
 import { Product, UserRole, Sale } from '../types';
 import { cn } from '../lib/utils';
+import InvoiceReceipt from '../components/common/InvoiceReceipt';
 
 interface SellerTerminalProps {
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
   role: UserRole;
+  sellerId: string;
+  businessName?: string;
   onSaleComplete?: (sale: Sale) => void;
 }
 
-const SellerTerminal = ({ products, setProducts, role, onSaleComplete }: SellerTerminalProps) => {
+const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, onSaleComplete }: SellerTerminalProps) => {
   const [cart, setCart] = useState<{product: Product, qty: number, overridePrice?: number}[]>([]);
   const [search, setSearch] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'DIGITAL' | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [completedSale, setCompletedSale] = useState<Sale | null>(null);
+  const invoiceRef = React.useRef<HTMLDivElement>(null);
 
   const addToCart = (product: Product) => {
     if (!product.isUnlimited && product.stock <= 0) return;
@@ -59,33 +64,33 @@ const SellerTerminal = ({ products, setProducts, role, onSaleComplete }: SellerT
       return;
     }
 
-    setProducts(prev => prev.map(p => {
-      const cartItem = cart.find(item => item.product.id === p.id);
-      if (cartItem && !p.isUnlimited) {
-        return { ...p, stock: Math.max(0, p.stock - cartItem.qty) };
-      }
-      return p;
-    }));
-
     const newSale: Sale = {
       id: `T-${Date.now()}`,
       date: new Date().toISOString(),
       total,
       items: cart.map(item => ({
         productId: item.product.id,
-        name: item.product.name,
-        qty: item.qty,
+        productName: item.product.name,
+        quantity: item.qty,
         price: item.overridePrice !== undefined ? item.overridePrice : item.product.price,
       })),
       paymentMethod,
-      sellerId: 'v1' // Placeholder, ideally this would come from auth context
+      sellerId
     };
 
     onSaleComplete?.(newSale); // Call the persistence callback
     setCart([]);
     setPaymentMethod(null); // Reset payment method
     setIsCheckoutOpen(false); // Close checkout, if it were open
-    alert('Venta completada con éxito');
+    setCompletedSale(newSale);
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleNewSale = () => {
+    setCompletedSale(null);
   };
 
   return (
@@ -256,6 +261,40 @@ const SellerTerminal = ({ products, setProducts, role, onSaleComplete }: SellerT
           </button>
         </div>
       </div>
+
+      {/* Invoice Modal Overlay */}
+      {completedSale && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl overflow-hidden max-w-sm w-full shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-emerald-50 text-emerald-600 font-bold text-center border-b border-emerald-100 relative">
+              Venta Exitosa
+              <button 
+                onClick={handleNewSale}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-2xl text-emerald-400 hover:text-emerald-600"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto print-receipt-container">
+              <InvoiceReceipt ref={invoiceRef} sale={completedSale} businessName={businessName} />
+            </div>
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
+              <button
+                onClick={handleNewSale}
+                className="flex-1 py-3 px-4 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Nueva Venta
+              </button>
+              <button
+                onClick={handlePrint}
+                className="flex-1 py-3 px-4 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
+              >
+                Imprimir Ticket
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
