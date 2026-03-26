@@ -1,12 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Search, Filter } from 'lucide-react';
+import { Building2, Search, Filter, X, UserRound, CalendarDays } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Business } from '../types';
 import { supabase } from '../lib/supabase';
 
+type AdminProfile = {
+  id: string;
+  name: string;
+  email: string;
+  status?: 'ACTIVE' | 'BLOCKED';
+  role?: string;
+};
+
 const SuperAdminEmpresas = () => {
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedBusiness, setSelectedBusiness] = useState<any | null>(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [businessAdmins, setBusinessAdmins] = useState<AdminProfile[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   useEffect(() => {
     const fetchBusinesses = async () => {
@@ -32,6 +44,57 @@ const SuperAdminEmpresas = () => {
 
     fetchBusinesses();
   }, []);
+
+  const formatDate = (dateValue?: string) => {
+    if (!dateValue) return 'No disponible';
+    const parsed = new Date(dateValue);
+    if (Number.isNaN(parsed.getTime())) return 'No disponible';
+    return parsed.toLocaleDateString('es-MX', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit'
+    });
+  };
+
+  const openCompanyDetails = async (business: any) => {
+    setSelectedBusiness(business);
+    setIsDetailsModalOpen(true);
+    setBusinessAdmins([]);
+    setLoadingDetails(true);
+
+    const ownerId = business.owner_id;
+    const adminMap = new Map<string, AdminProfile>();
+
+    if (ownerId) {
+      const { data: ownerData } = await supabase
+        .from('profiles')
+        .select('id, name, email, status, role')
+        .eq('id', ownerId);
+
+      ownerData?.forEach((admin: AdminProfile) => {
+        adminMap.set(admin.id, admin);
+      });
+    }
+
+    const { data: relatedAdmins } = await supabase
+      .from('profiles')
+      .select('id, name, email, status, role')
+      .eq('business_id', business.id)
+      .eq('role', 'OWNER');
+
+    relatedAdmins?.forEach((admin: AdminProfile) => {
+      adminMap.set(admin.id, admin);
+    });
+
+    setBusinessAdmins(Array.from(adminMap.values()));
+    setLoadingDetails(false);
+  };
+
+  const closeCompanyDetails = () => {
+    setIsDetailsModalOpen(false);
+    setSelectedBusiness(null);
+    setBusinessAdmins([]);
+  };
 
   return (
     <div className="space-y-6">
@@ -91,11 +154,102 @@ const SuperAdminEmpresas = () => {
                 </div>
               </div>
 
-              <button className="w-full mt-6 py-2 bg-slate-50 text-indigo-600 rounded-xl font-bold text-sm hover:bg-indigo-50 transition-all">
+              <button
+                onClick={() => openCompanyDetails(business)}
+                className="w-full mt-6 py-2 bg-slate-50 text-indigo-600 rounded-xl font-bold text-sm hover:bg-indigo-50 transition-all"
+              >
                 Ver Administradores
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {isDetailsModalOpen && selectedBusiness && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-2xl overflow-hidden relative animate-in fade-in zoom-in duration-200">
+            <button
+              onClick={closeCompanyDetails}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="p-8 max-h-[90vh] overflow-y-auto">
+              <h3 className="text-2xl font-bold text-slate-800 mb-2">Resumen de Empresa</h3>
+              <p className="text-slate-500 mb-6 text-sm">Características generales y administradores vinculados.</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Nombre</p>
+                  <p className="font-bold text-slate-800">{selectedBusiness.name}</p>
+                </div>
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Estado</p>
+                  <p className={cn(
+                    'font-bold',
+                    selectedBusiness.status === 'ACTIVE' ? 'text-emerald-600' : 'text-rose-600'
+                  )}>
+                    {selectedBusiness.status === 'ACTIVE' ? 'Activa' : 'Inactiva'}
+                  </p>
+                </div>
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Administrador principal</p>
+                  <p className="font-bold text-slate-800">{selectedBusiness.ownerName || 'Desconocido'}</p>
+                </div>
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Referencia</p>
+                  <p className="font-mono text-sm text-slate-700">{selectedBusiness.id}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="flex items-center gap-3 bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  <CalendarDays size={18} className="text-indigo-500" />
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Creada</p>
+                    <p className="font-semibold text-slate-700">{formatDate(selectedBusiness.created_at)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  <UserRound size={18} className="text-indigo-500" />
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Total administradores</p>
+                    <p className="font-semibold text-slate-700">{loadingDetails ? 'Cargando...' : businessAdmins.length}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border border-slate-100 rounded-2xl overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
+                  <p className="font-bold text-slate-700 text-sm">Administradores de la empresa</p>
+                </div>
+
+                {loadingDetails ? (
+                  <div className="p-6 text-sm text-slate-500">Cargando administradores...</div>
+                ) : businessAdmins.length === 0 ? (
+                  <div className="p-6 text-sm text-slate-500">No hay administradores vinculados a esta empresa.</div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {businessAdmins.map((admin) => (
+                      <div key={admin.id} className="p-4 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-800">{admin.name}</p>
+                          <p className="text-xs text-slate-500">{admin.email}</p>
+                        </div>
+                        <span className={cn(
+                          'px-2 py-1 rounded-full text-[10px] font-bold',
+                          admin.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                        )}>
+                          {admin.status === 'ACTIVE' ? 'Activo' : 'Bloqueado'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
