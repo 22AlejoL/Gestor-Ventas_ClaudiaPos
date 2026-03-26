@@ -101,6 +101,16 @@ export default function App() {
     await supabase.auth.signOut();
   };
 
+  const handleProfileUpdated = (updates: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        ...updates
+      };
+    });
+  };
+
   if (loadingAuth) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
@@ -134,7 +144,7 @@ export default function App() {
               <Route path="/ventas" element={<SellerTerminal products={products} setProducts={handleUpdateProducts} role={user.role} onSaleComplete={handleAddSale} />} />
               <Route path="/resumen" element={<SellerSummary sales={sales} />} />
               <Route path="/inventario" element={<SellerInventory products={products} />} />
-              <Route path="/configuracion" element={<ConfigurationView role={user.role} />} />
+              <Route path="/configuracion" element={<ConfigurationView role={user.role} user={user} onProfileUpdated={handleProfileUpdated} />} />
               <Route path="*" element={<Navigate to="/ventas" />} />
             </>
           )}
@@ -146,7 +156,7 @@ export default function App() {
               <Route path="/ventas" element={<SellerTerminal products={products} setProducts={handleUpdateProducts} role={user.role} onSaleComplete={handleAddSale} />} />
               <Route path="/reportes" element={<OwnerReports />} />
               <Route path="/inventario" element={<AdminInventory products={products} setProducts={handleUpdateProducts} />} />
-              <Route path="/configuracion" element={<ConfigurationView role={user.role} />} />
+              <Route path="/configuracion" element={<ConfigurationView role={user.role} user={user} onProfileUpdated={handleProfileUpdated} />} />
               <Route path="*" element={<Navigate to="/dashboard" />} />
             </>
           )}
@@ -158,7 +168,7 @@ export default function App() {
               <Route path="/dueños" element={<SuperAdminDueños />} />
               <Route path="/vendedores" element={<SuperAdminSellers />} />
               <Route path="/empresas" element={<SuperAdminEmpresas businesses={MOCK_BUSINESSES} />} />
-              <Route path="/sistema" element={<ConfigurationView role={user.role} />} />
+              <Route path="/sistema" element={<ConfigurationView role={user.role} user={user} onProfileUpdated={handleProfileUpdated} />} />
               <Route path="*" element={<Navigate to="/panel" />} />
             </>
           )}
