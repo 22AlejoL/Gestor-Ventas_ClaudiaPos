@@ -1,25 +1,43 @@
-import React, { useState } from 'react';
-import { Search, ShoppingCart, Trash2, Minus, Plus, Wallet, CreditCard, Smartphone } from 'lucide-react';
-import { Product, UserRole, Sale } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Search, ShoppingCart, Trash2, Minus, Plus, Wallet, CreditCard, Smartphone, Building2 } from 'lucide-react';
+import { Product, UserRole, Sale, Business } from '../types';
 import { cn } from '../lib/utils';
 import InvoiceReceipt from '../components/common/InvoiceReceipt';
+import { api } from '../services/api';
 
 interface SellerTerminalProps {
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
   role: UserRole;
   sellerId: string;
+  businessId?: string;
   businessName?: string;
   onSaleComplete?: (sale: Sale) => void;
 }
 
-const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, onSaleComplete }: SellerTerminalProps) => {
+const SellerTerminal = ({ products, setProducts, role, sellerId, businessId, businessName, onSaleComplete }: SellerTerminalProps) => {
   const [cart, setCart] = useState<{product: Product, qty: number, overridePrice?: number}[]>([]);
   const [search, setSearch] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'DIGITAL' | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string>(businessId || '');
   const invoiceRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (role === 'OWNER') {
+      api.getBusinessesByOwner(sellerId).then(data => {
+        setBusinesses(data);
+        // Si hay múltiples negocios y no hay uno seleccionado, usar el primero
+        if (data.length > 1 && !selectedBusinessId) {
+          setSelectedBusinessId(data[0].id);
+        } else if (data.length === 1 && !selectedBusinessId) {
+          setSelectedBusinessId(data[0].id);
+        }
+      });
+    }
+  }, [role, sellerId, selectedBusinessId]);
 
   const addToCart = (product: Product) => {
     if (!product.isUnlimited && product.stock <= 0) return;
@@ -75,7 +93,8 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
         price: item.overridePrice !== undefined ? item.overridePrice : item.product.price,
       })),
       paymentMethod,
-      sellerId
+      sellerId,
+      businessId: selectedBusinessId || cart[0]?.product.businessId
     };
 
     onSaleComplete?.(newSale); // Call the persistence callback
@@ -97,19 +116,43 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
     <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-120px)]">
       {/* Product Catalog */}
       <div className="flex-1 flex flex-col gap-4">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-          <input 
-            type="text" 
-            placeholder="Buscar producto o código de barras..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+        <div className="flex flex-col md:flex-row gap-4">
+          {businesses.length > 1 && (
+            <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm">
+              <Building2 size={18} className="text-slate-400" />
+              <select
+                value={selectedBusinessId}
+                onChange={(e) => setSelectedBusinessId(e.target.value)}
+                className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none cursor-pointer"
+              >
+                {businesses.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+            <input
+              type="text"
+              placeholder="Buscar producto o código de barras..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto pr-2">
-          {products.filter(p => p.name.toLowerCase().includes(search.toLowerCase())).map(product => (
+          {products
+            .filter(p => {
+              // Si hay un negocio seleccionado y el producto tiene businessId, filtrar por ese negocio
+              if (selectedBusinessId && p.businessId) {
+                return p.businessId === selectedBusinessId && p.name.toLowerCase().includes(search.toLowerCase());
+              }
+              return p.name.toLowerCase().includes(search.toLowerCase());
+            })
+            .map(product => (
             <button 
               key={product.id}
               onClick={() => addToCart(product)}
@@ -138,22 +181,32 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
       {/* Current Order */}
       <div className="w-full lg:w-[400px] bg-white rounded-3xl border border-slate-100 shadow-xl flex flex-col overflow-hidden">
         <div className="p-6 border-bottom border-slate-100 bg-slate-50/50">
-          <div className="flex justify-between items-center">
-            <h3 className="text-xl font-bold text-slate-800">Orden Actual</h3>
-            <div className="flex items-center gap-2">
-              {cart.length > 0 && (
-                <button 
-                  onClick={clearCart}
-                  className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
-                  title="Vaciar Carrito"
-                >
-                  <Trash2 size={18} />
-                </button>
-              )}
-              <span className="bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full text-xs font-bold">
-                {cart.length} items
-              </span>
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-bold text-slate-800">Orden Actual</h3>
+              <div className="flex items-center gap-2">
+                {cart.length > 0 && (
+                  <button
+                    onClick={clearCart}
+                    className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                    title="Vaciar Carrito"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                )}
+                <span className="bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full text-xs font-bold">
+                  {cart.length} items
+                </span>
+              </div>
             </div>
+            {businesses.length > 1 && selectedBusinessId && (
+              <div className="flex items-center gap-2 text-xs text-slate-500 bg-indigo-50 px-3 py-2 rounded-xl">
+                <Building2 size={14} className="text-indigo-600" />
+                <span className="font-bold text-indigo-900">
+                  {businesses.find(b => b.id === selectedBusinessId)?.name || 'Empresa'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

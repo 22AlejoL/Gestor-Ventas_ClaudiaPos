@@ -8,7 +8,7 @@ import {
   Tooltip as ReTooltip, 
   ResponsiveContainer as ReResponsiveContainer 
 } from 'recharts';
-import { DollarSign, Wallet, Package, XCircle, AlertCircle, Download, Building2 } from 'lucide-react';
+import { DollarSign, Wallet, Package, XCircle, AlertCircle, Download, Building2, TrendingUp, Receipt } from 'lucide-react';
 import StatCard from '../components/common/StatCard';
 import { Product, Sale, Business } from '../types';
 import { cn } from '../lib/utils';
@@ -106,6 +106,34 @@ const OwnerDashboard = ({ products, sales }: OwnerDashboardProps) => {
     ];
   }, [filteredSales]);
 
+  // Ventas por Empresa (solo cuando se ve el consolidado global)
+  const ventasPorEmpresa = useMemo(() => {
+    if (selectedBusiness !== 'ALL') return null;
+
+    const ventasMap = new Map<string, { nombre: string; ventas: number; cantidadVentas: number }>();
+
+    // Inicializar con todas las empresas
+    businesses.forEach(b => {
+      ventasMap.set(b.id, { nombre: b.name, ventas: 0, cantidadVentas: 0 });
+    });
+
+    // También agregar una entrada para ventas sin empresa asignada
+    ventasMap.set('unassigned', { nombre: 'Sin asignar', ventas: 0, cantidadVentas: 0 });
+
+    filteredSales.forEach(sale => {
+      const businessId = sale.businessId || 'unassigned';
+      const current = ventasMap.get(businessId) || { nombre: 'Sin asignar', ventas: 0, cantidadVentas: 0 };
+      current.ventas += sale.total;
+      current.cantidadVentas += 1;
+      ventasMap.set(businessId, current);
+    });
+
+    // Convertir a array y ordenar por ventas
+    return Array.from(ventasMap.values())
+      .filter(b => b.ventas > 0 || businesses.some(b => b.id === ventasMap.get(b.id)?.nombre))
+      .sort((a, b) => b.ventas - a.ventas);
+  }, [filteredSales, selectedBusiness, businesses]);
+
   if (loading) {
     return (
       <div className="flex justify-center py-20">
@@ -145,25 +173,77 @@ const OwnerDashboard = ({ products, sales }: OwnerDashboardProps) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard 
-          title="Utilidad Neta Calculada" 
-          value={`$${metrics.netProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} 
-          icon={DollarSign} 
-          color="bg-indigo-600" 
+        <StatCard
+          title="Utilidad Neta Calculada"
+          value={`$${metrics.netProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+          icon={DollarSign}
+          color="bg-indigo-600"
         />
-        <StatCard 
-          title="Flujo de Caja (Bruto)" 
-          value={`$${metrics.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} 
-          icon={Wallet} 
-          color="bg-indigo-600" 
+        <StatCard
+          title="Flujo de Caja (Bruto)"
+          value={`$${metrics.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+          icon={Wallet}
+          color="bg-indigo-600"
         />
-        <StatCard 
-          title="Salud Inventario" 
-          value={metrics.lowStockProducts.length > 0 ? "Requiere Atención" : "Óptima"} 
-          icon={Package} 
-          color={metrics.lowStockProducts.length > 0 ? "bg-rose-500" : "bg-indigo-600"} 
+        <StatCard
+          title="Salud Inventario"
+          value={metrics.lowStockProducts.length > 0 ? "Requiere Atención" : "Óptima"}
+          icon={Package}
+          color={metrics.lowStockProducts.length > 0 ? "bg-rose-500" : "bg-indigo-600"}
         />
       </div>
+
+      {/* Ventas por Empresa - Solo visible cuando se ven todas las empresas */}
+      {ventasPorEmpresa && ventasPorEmpresa.length > 0 && (
+        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+              <Receipt className="text-indigo-600" size={20} />
+              Balance de Ventas por Empresa
+            </h3>
+            <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
+              {ventasPorEmpresa.length} empresas
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {ventasPorEmpresa.map((empresa, index) => {
+              const porcentaje = metrics.totalRevenue > 0
+                ? (empresa.ventas / metrics.totalRevenue * 100).toFixed(1)
+                : 0;
+
+              return (
+                <div
+                  key={empresa.nombre}
+                  className="p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-800">{empresa.nombre}</h4>
+                        <p className="text-xs text-slate-500">{empresa.cantidadVentas} ventas realizadas</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-slate-800">${empresa.ventas.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                      <p className="text-xs text-slate-500">{porcentaje}% del total</p>
+                    </div>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${porcentaje}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">

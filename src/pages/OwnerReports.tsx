@@ -1,7 +1,9 @@
 import React from 'react';
 import { Download, ArrowUpRight, ArrowDownRight, History } from 'lucide-react';
-import { Sale } from '../types';
+import { Sale, Business } from '../types';
 import SalesHistoryModal from '../components/common/SalesHistoryModal';
+import { api } from '../services/api';
+import { supabase } from '../lib/supabase';
 import { 
   LineChart, 
   Line, 
@@ -21,6 +23,65 @@ interface OwnerReportsProps {
 
 const OwnerReports = ({ sales }: OwnerReportsProps) => {
   const [showHistoryModal, setShowHistoryModal] = React.useState(false);
+  const [businesses, setBusinesses] = React.useState<Business[]>([]);
+  const [selectedBusiness, setSelectedBusiness] = React.useState<string>('ALL');
+
+  React.useEffect(() => {
+    const fetchOwnerBusinesses = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      try {
+        const ownerBusinesses = await api.getBusinessesByOwner(session.user.id);
+        setBusinesses(ownerBusinesses);
+      } catch (error) {
+        console.error('Error fetching owner businesses for reports:', error);
+      }
+    };
+
+    fetchOwnerBusinesses();
+  }, []);
+
+  const ownerSales = React.useMemo(() => {
+    const businessIds = businesses.map(b => b.id);
+
+    if (businessIds.length === 0) {
+      // Keep legacy unassigned sales visible while owner businesses are not linked yet.
+      return sales.filter(s => !s.businessId);
+    }
+
+    return sales.filter(s => !s.businessId || businessIds.includes(s.businessId));
+  }, [sales, businesses]);
+
+  const filteredSales = React.useMemo(() => {
+    if (selectedBusiness === 'ALL') return ownerSales;
+    return ownerSales.filter(s => s.businessId === selectedBusiness);
+  }, [ownerSales, selectedBusiness]);
+
+  const salesByBusiness = React.useMemo(() => {
+    if (selectedBusiness !== 'ALL') return [];
+
+    const businessMap = new Map<string, { name: string; total: number; salesCount: number }>();
+    businesses.forEach(b => {
+      businessMap.set(b.id, { name: b.name, total: 0, salesCount: 0 });
+    });
+
+    filteredSales.forEach(sale => {
+      const key = sale.businessId || 'unassigned';
+      if (!businessMap.has(key)) {
+        businessMap.set(key, { name: 'Sin asignar', total: 0, salesCount: 0 });
+      }
+
+      const current = businessMap.get(key)!;
+      current.total += sale.total;
+      current.salesCount += 1;
+      businessMap.set(key, current);
+    });
+
+    return Array.from(businessMap.values())
+      .filter(entry => entry.total > 0 || entry.salesCount > 0)
+      .sort((a, b) => b.total - a.total);
+  }, [filteredSales, businesses, selectedBusiness]);
 
   // Dynamic calculations based on real sales data
   const { data, pieData, metrics } = React.useMemo(() => {
@@ -47,7 +108,7 @@ const OwnerReports = ({ sales }: OwnerReportsProps) => {
     let totalRevenue = 0;
     let totalItems = 0;
 
-    sales.forEach(sale => {
+    filteredSales.forEach(sale => {
       const saleDate = new Date(sale.date);
       const saleMonth = saleDate.getMonth();
       const saleYear = saleDate.getFullYear();
@@ -86,13 +147,13 @@ const OwnerReports = ({ sales }: OwnerReportsProps) => {
       pieData: pieFormatted,
       metrics: {
         totalRevenue,
-        totalSales: sales.length,
-        avgTicket: sales.length > 0 ? totalRevenue / sales.length : 0,
+        totalSales: filteredSales.length,
+        avgTicket: filteredSales.length > 0 ? totalRevenue / filteredSales.length : 0,
         totalItems,
         totalPie
       }
     };
-  }, [sales]);
+  }, [filteredSales]);
 
   return (
     <div className="space-y-6">
@@ -102,6 +163,18 @@ const OwnerReports = ({ sales }: OwnerReportsProps) => {
           <p className="text-slate-500">Análisis detallado de ventas y rentabilidad basado en registros reales</p>
         </div>
         <div className="flex gap-3">
+          {businesses.length > 1 && (
+            <select
+              value={selectedBusiness}
+              onChange={(e) => setSelectedBusiness(e.target.value)}
+              className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="ALL">Todas las empresas</option>
+              {businesses.map(b => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          )}
           <select className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
             <option>Últimos 6 meses</option>
             <option>Este año</option>
@@ -210,9 +283,33 @@ const OwnerReports = ({ sales }: OwnerReportsProps) => {
         </div>
       </div>
 
+      {salesByBusiness.length > 0 && (
+        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-slate-800">Ventas por Empresa</h3>
+            <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
+              {salesByBusiness.length} empresas
+            </span>
+          </div>
+          <div className="space-y-3">
+            {salesByBusiness.map((business) => (
+              <div key={business.name} className="flex items-center justify-between bg-slate-50 rounded-2xl px-4 py-3">
+                <div>
+                  <p className="font-bold text-slate-800">{business.name}</p>
+                  <p className="text-xs text-slate-500">{business.salesCount} ventas</p>
+                </div>
+                <p className="font-bold text-slate-800">
+                  ${business.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {showHistoryModal && (
         <SalesHistoryModal 
-          sales={sales} 
+          sales={filteredSales} 
           role="OWNER" 
           onClose={() => setShowHistoryModal(false)} 
         />

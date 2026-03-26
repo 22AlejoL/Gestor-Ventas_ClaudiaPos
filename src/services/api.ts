@@ -89,9 +89,9 @@ export const api = {
     },
 
     async addSale(sale: Sale): Promise<Sale> {
-        // Find a business ID for the seller (just pick the first available for now, since it wasn't tracked)
-        let businessId = null;
-        if (sale.sellerId) {
+        // Respect explicit business selection from UI and fallback to seller profile only if missing.
+        let businessId = sale.businessId || null;
+        if (!businessId && sale.sellerId) {
             const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', sale.sellerId).single();
             if (profile) businessId = profile.business_id;
         }

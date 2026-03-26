@@ -166,7 +166,7 @@ export default function App() {
           {user.role === 'OWNER' && (
             <>
               <Route path="/dashboard" element={<OwnerDashboard products={products} sales={sales} />} />
-              <Route path="/ventas" element={<SellerTerminal products={products} setProducts={handleUpdateProducts} role={user.role} sellerId={user.id} onSaleComplete={handleAddSale} />} />
+              <Route path="/ventas" element={<SellerTerminal products={products} setProducts={handleUpdateProducts} role={user.role} sellerId={user.id} businessId={user.businessId} onSaleComplete={handleAddSale} />} />
               <Route path="/reportes" element={<OwnerReports sales={sales} />} />
               <Route path="/inventario" element={<AdminInventory products={products} setProducts={handleUpdateProducts} user={user} />} />
               <Route path="/configuracion" element={<ConfigurationView role={user.role} user={user} />} />
