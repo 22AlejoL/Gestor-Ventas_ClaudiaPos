@@ -52,12 +52,19 @@ export default function App() {
   const fetchProfile = async (supabaseUser: any) => {
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', supabaseUser.id).single();
     if (profile) {
+      let businessName = undefined;
+      if (profile.business_id) {
+        const business = await api.getBusiness(profile.business_id);
+        businessName = business?.name;
+      }
+      
       setUser({
         id: profile.id,
         name: profile.name,
         email: profile.email,
         role: profile.role,
         businessId: profile.business_id,
+        businessName,
         avatar: profile.avatar
       });
       fetchData(); // Fetch products and sales after login
@@ -81,15 +88,31 @@ export default function App() {
   const handleUpdateProducts = async (newProducts: React.SetStateAction<Product[]>) => {
     setProducts(prev => {
       const updated = typeof newProducts === 'function' ? newProducts(prev) : newProducts;
-      api.updateProducts(updated).catch(console.error);
-      return updated;
+      
+      const updatedWithBusiness = updated.map(p => ({
+        ...p,
+        businessId: p.businessId || user?.businessId
+      }));
+
+      api.updateProducts(updatedWithBusiness).catch(console.error);
+      return updatedWithBusiness;
     });
   };
 
   const handleAddSale = async (sale: Sale) => {
     try {
-      const savedSale = await api.addSale(sale);
+      const saleWithBusinessData = {
+        ...sale,
+        businessId: sale.businessId || user?.businessId
+      };
+      
+      const savedSale = await api.addSale(saleWithBusinessData);
       setSales(prev => [...prev, savedSale]);
+      
+      // Re-fetch products to ensure local stock matches the database
+      const updatedProducts = await api.getProducts();
+      // Use internal setProducts directly without triggering handleUpdateProducts' upsert
+      setProducts(updatedProducts);
     } catch (error) {
       console.error('Error saving sale:', error);
       // Even if API fails, update local state to keep UI snappy
@@ -99,16 +122,6 @@ export default function App() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-  };
-
-  const handleProfileUpdated = (updates: Partial<User>) => {
-    setUser(prev => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        ...updates
-      };
-    });
   };
 
   if (loadingAuth) {
@@ -141,10 +154,10 @@ export default function App() {
           {/* Seller Routes */}
           {user.role === 'SELLER' && (
             <>
-              <Route path="/ventas" element={<SellerTerminal products={products} setProducts={handleUpdateProducts} role={user.role} onSaleComplete={handleAddSale} />} />
-              <Route path="/resumen" element={<SellerSummary sales={sales} />} />
+              <Route path="/ventas" element={<SellerTerminal products={products} setProducts={handleUpdateProducts} role={user.role} sellerId={user.id} businessName={user.businessName} onSaleComplete={handleAddSale} />} />
+              <Route path="/resumen" element={<SellerSummary sales={sales} role={user.role} sellerId={user.id} />} />
               <Route path="/inventario" element={<SellerInventory products={products} />} />
-              <Route path="/configuracion" element={<ConfigurationView role={user.role} user={user} onProfileUpdated={handleProfileUpdated} />} />
+              <Route path="/configuracion" element={<ConfigurationView role={user.role} />} />
               <Route path="*" element={<Navigate to="/ventas" />} />
             </>
           )}
@@ -153,10 +166,10 @@ export default function App() {
           {user.role === 'OWNER' && (
             <>
               <Route path="/dashboard" element={<OwnerDashboard products={products} sales={sales} />} />
-              <Route path="/ventas" element={<SellerTerminal products={products} setProducts={handleUpdateProducts} role={user.role} onSaleComplete={handleAddSale} />} />
-              <Route path="/reportes" element={<OwnerReports />} />
-              <Route path="/inventario" element={<AdminInventory products={products} setProducts={handleUpdateProducts} />} />
-              <Route path="/configuracion" element={<ConfigurationView role={user.role} user={user} onProfileUpdated={handleProfileUpdated} />} />
+              <Route path="/ventas" element={<SellerTerminal products={products} setProducts={handleUpdateProducts} role={user.role} sellerId={user.id} onSaleComplete={handleAddSale} />} />
+              <Route path="/reportes" element={<OwnerReports sales={sales} />} />
+              <Route path="/inventario" element={<AdminInventory products={products} setProducts={handleUpdateProducts} user={user} />} />
+              <Route path="/configuracion" element={<ConfigurationView role={user.role} />} />
               <Route path="*" element={<Navigate to="/dashboard" />} />
             </>
           )}
@@ -168,7 +181,7 @@ export default function App() {
               <Route path="/dueños" element={<SuperAdminDueños />} />
               <Route path="/vendedores" element={<SuperAdminSellers />} />
               <Route path="/empresas" element={<SuperAdminEmpresas businesses={MOCK_BUSINESSES} />} />
-              <Route path="/sistema" element={<ConfigurationView role={user.role} user={user} onProfileUpdated={handleProfileUpdated} />} />
+              <Route path="/sistema" element={<ConfigurationView role={user.role} />} />
               <Route path="*" element={<Navigate to="/panel" />} />
             </>
           )}

@@ -1,7 +1,35 @@
-import { Product, Sale } from '../types';
+import { Product, Sale, Business } from '../types';
 import { supabase } from '../lib/supabase';
 
 export const api = {
+    async getBusiness(id: string): Promise<Business | null> {
+        try {
+            const { data, error } = await supabase.from('businesses').select('*').eq('id', id).single();
+            if (error) throw error;
+            return {
+                id: data.id,
+                name: data.name,
+                ownerId: data.owner_id,
+                status: data.status
+            };
+        } catch (e) {
+            console.error('Error fetching business:', e);
+            const mock = await import('../data/mock');
+            return mock.MOCK_BUSINESSES.find(b => b.id === id) || null;
+        }
+    },
+
+    async getBusinessesByOwner(ownerId: string): Promise<Business[]> {
+        const { data, error } = await supabase.from('businesses').select('*').eq('owner_id', ownerId).eq('status', 'ACTIVE');
+        if (error) throw error;
+        return (data || []).map(b => ({
+            id: b.id,
+            name: b.name,
+            ownerId: b.owner_id,
+            status: b.status
+        }));
+    },
+
     async getProducts(): Promise<Product[]> {
         const { data, error } = await supabase.from('products').select('*');
         if (error) throw error;
@@ -40,7 +68,7 @@ export const api = {
     },
 
     async getSales(): Promise<Sale[]> {
-        const { data, error } = await supabase.from('sales').select('*, sale_items(*)');
+        const { data, error } = await supabase.from('sales').select('*, profiles(name), sale_items(*, products(name))');
         if (error) throw error;
         
         return (data || []).map(s => ({
@@ -49,9 +77,11 @@ export const api = {
             total: s.total,
             paymentMethod: s.payment_method,
             sellerId: s.seller_id,
+            sellerName: s.profiles?.name,
             businessId: s.business_id,
             items: (s.sale_items || []).map((i: any) => ({
                 productId: i.product_id,
+                productName: i.products?.name || 'Agregado a sistema',
                 quantity: i.quantity,
                 price: i.price
             }))
@@ -81,11 +111,26 @@ export const api = {
             const items = sale.items.map((i: any) => ({
                 sale_id: saleData.id,
                 product_id: i.productId,
-                quantity: i.qty || i.quantity,
+                quantity: i.quantity,
                 price: i.price
             }));
             const { error: itemsError } = await supabase.from('sale_items').insert(items);
             if (itemsError) throw itemsError;
+
+            // Deduct stock for each sold item
+            for (const item of sale.items) {
+                const qty = item.quantity;
+                const { data: productData, error: productError } = await supabase
+                    .from('products')
+                    .select('stock, is_unlimited')
+                    .eq('id', item.productId)
+                    .single();
+                
+                if (!productError && productData && !productData.is_unlimited) {
+                    const newStock = Math.max(0, productData.stock - qty);
+                    await supabase.from('products').update({ stock: newStock }).eq('id', item.productId);
+                }
+            }
         }
 
         return sale;
