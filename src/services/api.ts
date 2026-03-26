@@ -89,21 +89,57 @@ export const api = {
     },
 
     async addSale(sale: Sale): Promise<Sale> {
-        // Find a business ID for the seller (just pick the first available for now, since it wasn't tracked)
-        let businessId = null;
-        if (sale.sellerId) {
-            const { data: profile } = await supabase.from('profiles').select('business_id').eq('id', sale.sellerId).single();
-            if (profile) businessId = profile.business_id;
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('id, role, business_id')
+            .eq('id', sale.sellerId)
+            .single();
+
+        if (profileError || !profile) {
+            throw profileError || new Error('No se pudo cargar el perfil para registrar la venta.');
         }
 
-        const { data: saleData, error: saleError } = await supabase.from('sales').insert({
-            display_id: sale.id, // e.g. "T-123123123"
-            date: sale.date,
-            total: sale.total,
-            payment_method: sale.paymentMethod,
-            seller_id: sale.sellerId,
-            business_id: businessId
-        }).select().single();
+        let businessId = sale.businessId || null;
+
+        if (profile.role === 'OWNER') {
+            if (!businessId) {
+                throw new Error('Selecciona una empresa válida para registrar la venta.');
+            }
+
+            // Owner can sell only in businesses linked to them, including all their companies.
+            const { data: ownerBusiness, error: ownerBusinessError } = await supabase
+                .from('businesses')
+                .select('id')
+                .eq('id', businessId)
+                .eq('owner_id', sale.sellerId)
+                .maybeSingle();
+
+            if (ownerBusinessError || !ownerBusiness) {
+                throw ownerBusinessError || new Error('No tienes permiso para vender en esta empresa.');
+            }
+        } else if (profile.role === 'SELLER') {
+            // Seller is bound to the company assigned in profile.
+            businessId = profile.business_id;
+        } else if (!businessId) {
+            businessId = profile.business_id;
+        }
+
+        if (!businessId) {
+            throw new Error('No se pudo determinar la empresa de la venta.');
+        }
+
+        const { data: saleData, error: saleError } = await supabase
+            .from('sales')
+            .insert({
+                display_id: sale.id,
+                date: sale.date,
+                total: sale.total,
+                payment_method: sale.paymentMethod,
+                seller_id: sale.sellerId,
+                business_id: businessId
+            })
+            .select('id')
+            .single();
 
         if (saleError) throw saleError;
 
@@ -117,22 +153,48 @@ export const api = {
             const { error: itemsError } = await supabase.from('sale_items').insert(items);
             if (itemsError) throw itemsError;
 
-            // Deduct stock for each sold item
+            // Deduct stock for each sold item and fail fast if user lacks permission.
             for (const item of sale.items) {
                 const qty = item.quantity;
                 const { data: productData, error: productError } = await supabase
                     .from('products')
-                    .select('stock, is_unlimited')
+                    .select('stock, is_unlimited, business_id')
                     .eq('id', item.productId)
                     .single();
-                
-                if (!productError && productData && !productData.is_unlimited) {
+
+                if (productError || !productData) {
+                    throw productError || new Error('No se pudo validar el producto para descontar inventario.');
+                }
+
+                if (productData.business_id && productData.business_id !== businessId) {
+                    throw new Error('El producto no pertenece a la empresa seleccionada.');
+                }
+
+                if (!productData.is_unlimited) {
                     const newStock = Math.max(0, productData.stock - qty);
-                    await supabase.from('products').update({ stock: newStock }).eq('id', item.productId);
+                    let updateStockQuery = supabase
+                        .from('products')
+                        .update({ stock: newStock })
+                        .eq('id', item.productId);
+
+                    // Keep tenant-safety when the product is linked to a business,
+                    // but still support legacy rows that don't have business_id.
+                    if (productData.business_id) {
+                        updateStockQuery = updateStockQuery.eq('business_id', businessId);
+                    }
+
+                    const { error: updateStockError } = await updateStockQuery;
+
+                    if (updateStockError) {
+                        throw updateStockError;
+                    }
                 }
             }
         }
 
-        return sale;
+        return {
+            ...sale,
+            businessId
+        };
     }
 };
