@@ -129,8 +129,9 @@ const OwnerDashboard = ({ products, sales }: OwnerDashboardProps) => {
     });
 
     // Convertir a array y ordenar por ventas
-    return Array.from(ventasMap.values())
-      .filter(b => b.ventas > 0 || businesses.some(b => b.id === ventasMap.get(b.id)?.nombre))
+    return Array.from(ventasMap.entries())
+      .filter(([key, value]) => value.ventas > 0 || businesses.some(bus => bus.id === key))
+      .map(([, value]) => value)
       .sort((a, b) => b.ventas - a.ventas);
   }, [filteredSales, selectedBusiness, businesses]);
 

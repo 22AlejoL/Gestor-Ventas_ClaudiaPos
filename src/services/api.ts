@@ -20,7 +20,7 @@ export const api = {
     },
 
     async getBusinessesByOwner(ownerId: string): Promise<Business[]> {
-        const { data, error } = await supabase.from('businesses').select('*').eq('owner_id', ownerId).eq('status', 'ACTIVE');
+        const { data, error } = await supabase.from('businesses').select('*').eq('owner_id', ownerId);
         if (error) throw error;
         return (data || []).map(b => ({
             id: b.id,
@@ -128,7 +128,10 @@ export const api = {
                 
                 if (!productError && productData && !productData.is_unlimited) {
                     const newStock = Math.max(0, productData.stock - qty);
-                    await supabase.from('products').update({ stock: newStock }).eq('id', item.productId);
+                    const { error: updateError } = await supabase.from('products').update({ stock: newStock }).eq('id', item.productId);
+                    if (updateError) {
+                        console.error('Error updating stock for product', item.productId, updateError);
+                    }
                 }
             }
         }

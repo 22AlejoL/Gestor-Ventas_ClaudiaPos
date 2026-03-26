@@ -29,15 +29,12 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessId, bus
     if (role === 'OWNER') {
       api.getBusinessesByOwner(sellerId).then(data => {
         setBusinesses(data);
-        // Si hay múltiples negocios y no hay uno seleccionado, usar el primero
-        if (data.length > 1 && !selectedBusinessId) {
-          setSelectedBusinessId(data[0].id);
-        } else if (data.length === 1 && !selectedBusinessId) {
-          setSelectedBusinessId(data[0].id);
+        if (data.length > 0) {
+          setSelectedBusinessId(prev => prev || data[0].id);
         }
       });
     }
-  }, [role, sellerId, selectedBusinessId]);
+  }, [role, sellerId]);
 
   const addToCart = (product: Product) => {
     if (!product.isUnlimited && product.stock <= 0) return;
@@ -76,9 +73,14 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessId, bus
     return acc + (price * item.qty);
   }, 0);
 
-  const handleCompleteSale = () => {
+  const handleCompleteSale = async () => {
     if (!paymentMethod) {
       alert('Por favor, selecciona un método de pago.');
+      return;
+    }
+
+    if (role === 'OWNER' && !selectedBusinessId) {
+      alert('Por favor, selecciona la empresa para esta venta.');
       return;
     }
 
@@ -97,11 +99,16 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessId, bus
       businessId: selectedBusinessId || cart[0]?.product.businessId
     };
 
-    onSaleComplete?.(newSale); // Call the persistence callback
-    setCart([]);
-    setPaymentMethod(null); // Reset payment method
-    setIsCheckoutOpen(false); // Close checkout, if it were open
-    setCompletedSale(newSale);
+    try {
+      await onSaleComplete?.(newSale);
+      setCart([]);
+      setPaymentMethod(null);
+      setIsCheckoutOpen(false);
+      setCompletedSale(newSale);
+    } catch (error) {
+      console.error('Error completing sale:', error);
+      alert('Error al registrar la venta. Por favor intente de nuevo.');
+    }
   };
 
   const handlePrint = () => {
@@ -306,7 +313,7 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessId, bus
           </div>
 
           <button 
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || (role === 'OWNER' && !selectedBusinessId)}
             onClick={handleCompleteSale}
             className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
           >
@@ -329,7 +336,7 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessId, bus
               </button>
             </div>
             <div className="flex-1 overflow-y-auto print-receipt-container">
-              <InvoiceReceipt ref={invoiceRef} sale={completedSale} businessName={businessName} />
+              <InvoiceReceipt ref={invoiceRef} sale={completedSale} businessName={businesses.find(b => b.id === completedSale.businessId)?.name || businessName} />
             </div>
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
               <button

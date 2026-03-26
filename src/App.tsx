@@ -100,23 +100,20 @@ export default function App() {
   };
 
   const handleAddSale = async (sale: Sale) => {
+    const saleWithBusinessData = {
+      ...sale,
+      businessId: sale.businessId || user?.businessId
+    };
+
+    const savedSale = await api.addSale(saleWithBusinessData);
+    setSales(prev => [...prev, savedSale]);
+
+    // Re-fetch products to ensure local stock matches the database
     try {
-      const saleWithBusinessData = {
-        ...sale,
-        businessId: sale.businessId || user?.businessId
-      };
-      
-      const savedSale = await api.addSale(saleWithBusinessData);
-      setSales(prev => [...prev, savedSale]);
-      
-      // Re-fetch products to ensure local stock matches the database
       const updatedProducts = await api.getProducts();
-      // Use internal setProducts directly without triggering handleUpdateProducts' upsert
       setProducts(updatedProducts);
-    } catch (error) {
-      console.error('Error saving sale:', error);
-      // Even if API fails, update local state to keep UI snappy
-      setSales(prev => [...prev, sale]);
+    } catch {
+      console.error('Error re-fetching products after sale');
     }
   };
 
