@@ -55,12 +55,31 @@ ClaudiaPOS is a high-performance, aesthetically pleasing **SaaS Point of Sale (P
 
 ---
 
-## 🔐 Authentication (Demo Mode)
+## 🔐 Authentication (Current Flow)
 
-Access different views by using the following email patterns in the login screen:
-- **Super Admin:** Any email containing `admin`
-- **Business Owner:** Any email containing `owner`
-- **Seller:** Any other email (default role)
+Authentication is handled with Supabase Auth using real credentials (`email` + `password`) from the login screen.
+
+After login, the app resolves permissions from the `profiles` table and enables routes based on role:
+- **SUPER_ADMIN**
+- **OWNER**
+- **SELLER**
+
+Notes:
+- The UI role is no longer assigned from email string patterns.
+- User/role provisioning for admin flows is done through the `manage-users` Supabase function.
+
+### Required Environment Variables
+
+Create `.env.local` with:
+
+```bash
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+VITE_DATA_SOURCE=supabase
+# Optional when using local Express for products/sales
+# VITE_DATA_SOURCE=local
+# VITE_LOCAL_API_BASE_URL=http://localhost:3001
+```
 
 ---
 
@@ -70,6 +89,8 @@ Access different views by using the following email patterns in the login screen
 - `src/types.ts`: Core data models and TypeScript definitions.
 - `src/main.tsx`: Application entry point.
 - `tailwind.config.js`: Custom design system configuration.
+- `src/services/api.ts`: Main data service for products/sales/business reads.
+- `src/server/index.ts`: Local Express server for file-backed endpoints (`/api/products`, `/api/sales`) used as a lightweight local backend option.
 
 ---
 
@@ -78,4 +99,4 @@ Access different views by using the following email patterns in the login screen
 - [ ] Transition from Local State to Global State (Zustand/Redux).
 - [ ] Backend integration with Express (already in `package.json`).
 - [ ] Database persistence (PostgreSQL/MongoDB).
-- [ ] AI-powered sales forecasting using Google Gemini (dependency already included).
+- [ ] AI-powered sales forecasting.

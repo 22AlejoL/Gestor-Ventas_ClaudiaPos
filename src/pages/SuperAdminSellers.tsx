@@ -2,10 +2,34 @@ import React, { useState, useEffect } from 'react';
 import { Plus, X, ShieldBan, ShieldCheck, Store } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
-import { User, Business } from '../types';
+import { Business } from '../types';
+import StyledDropdown from '../components/common/StyledDropdown';
+
+type SellerRow = {
+  id: string;
+  name: string;
+  email: string;
+  status: 'ACTIVE' | 'BLOCKED';
+  businessName: string;
+};
+
+type SellerProfileRow = {
+  id: string;
+  name: string;
+  email: string;
+  status: 'ACTIVE' | 'BLOCKED';
+  business_id?: string;
+};
+
+type BusinessRow = {
+  id: string;
+  name: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  owner_id: string;
+};
 
 export default function SuperAdminSellers() {
-  const [sellers, setSellers] = useState<any[]>([]);
+  const [sellers, setSellers] = useState<SellerRow[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -17,11 +41,19 @@ export default function SuperAdminSellers() {
   const [selectedBusinessId, setSelectedBusinessId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const fetchSellersAndBusinesses = async () => {
     setLoading(true);
-    const { data: profiles } = await supabase.from('profiles').select('*').eq('role', 'SELLER');
-    const { data: fetchedBusinesses } = await supabase.from('businesses').select('*');
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, name, email, status, business_id')
+      .eq('role', 'SELLER')
+      .returns<SellerProfileRow[]>();
+    const { data: fetchedBusinesses } = await supabase
+      .from('businesses')
+      .select('id, name, status, owner_id')
+      .returns<BusinessRow[]>();
 
     if (fetchedBusinesses) {
       setBusinesses(fetchedBusinesses);
@@ -30,7 +62,7 @@ export default function SuperAdminSellers() {
     }
 
     if (profiles) {
-      const formatted = profiles.map(p => {
+      const formatted = profiles.map((p) => {
         const b = fetchedBusinesses?.find(bus => bus.id === p.business_id);
         return { ...p, businessName: b ? b.name : 'Sin Asignar' };
       });
@@ -91,13 +123,28 @@ export default function SuperAdminSellers() {
 
   const toggleStatus = async (userId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE';
+    setActionError('');
     setSellers(prev => prev.map(s => s.id === userId ? { ...s, status: newStatus } : s));
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    await supabase.functions.invoke('manage-users', {
-      body: { action: 'toggle_status', targetUserId: userId, status: newStatus },
-      headers: { Authorization: `Bearer ${session?.access_token}` }
-    });
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Sesion invalida');
+      }
+
+      const { error: invokeError } = await supabase.functions.invoke('manage-users', {
+        body: { action: 'toggle_status', targetUserId: userId, status: newStatus },
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+
+      if (invokeError) {
+        throw invokeError;
+      }
+    } catch (e) {
+      console.error('Error toggling seller status:', e);
+      setSellers(prev => prev.map(s => s.id === userId ? { ...s, status: currentStatus } : s));
+      setActionError('No se pudo actualizar el estado del vendedor. Intenta nuevamente.');
+    }
   };
 
   return (
@@ -117,6 +164,11 @@ export default function SuperAdminSellers() {
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+        {actionError && (
+          <div className="mx-6 mt-6 p-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-sm font-medium">
+            {actionError}
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
@@ -204,17 +256,16 @@ export default function SuperAdminSellers() {
               <form onSubmit={handleCreateSeller} className="space-y-4">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Empresa Asignada</label>
-                  <select
-                    required
+                  <StyledDropdown
                     value={selectedBusinessId}
-                    onChange={e => setSelectedBusinessId(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {businesses.length === 0 && <option value="" disabled>Cargando empresas...</option>}
-                    {businesses.map(b => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </select>
+                    onChange={setSelectedBusinessId}
+                    searchable
+                    options={
+                      businesses.length === 0
+                        ? [{ value: '', label: 'Cargando empresas...' }]
+                        : businesses.map((business) => ({ value: business.id, label: business.name }))
+                    }
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Nombre Completo</label>

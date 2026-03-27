@@ -2,10 +2,28 @@ import React, { useState, useEffect } from 'react';
 import { Plus, X, ShieldBan, ShieldCheck } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
-import { User } from '../types';
+
+type OwnerRow = {
+  id: string;
+  name: string;
+  email: string;
+  status: 'ACTIVE' | 'BLOCKED';
+  companies: number;
+};
+
+type OwnerProfileRow = {
+  id: string;
+  name: string;
+  email: string;
+  status: 'ACTIVE' | 'BLOCKED';
+};
+
+type OwnerBusinessRow = {
+  owner_id: string;
+};
 
 export default function SuperAdminDueños() {
-  const [owners, setOwners] = useState<any[]>([]);
+  const [owners, setOwners] = useState<OwnerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
@@ -16,11 +34,19 @@ export default function SuperAdminDueños() {
   const [businessNames, setBusinessNames] = useState<string[]>(['']);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const fetchOwners = async () => {
     setLoading(true);
-    const { data: profiles } = await supabase.from('profiles').select('*').eq('role', 'OWNER');
-    const { data: businesses } = await supabase.from('businesses').select('owner_id');
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, name, email, status')
+      .eq('role', 'OWNER')
+      .returns<OwnerProfileRow[]>();
+    const { data: businesses } = await supabase
+      .from('businesses')
+      .select('owner_id')
+      .returns<OwnerBusinessRow[]>();
 
     if (profiles) {
       const formatted = profiles.map(p => {
@@ -102,13 +128,28 @@ export default function SuperAdminDueños() {
 
   const toggleStatus = async (userId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE';
+    setActionError('');
     setOwners(prev => prev.map(o => o.id === userId ? { ...o, status: newStatus } : o));
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    await supabase.functions.invoke('manage-users', {
-      body: { action: 'toggle_status', targetUserId: userId, status: newStatus },
-      headers: { Authorization: `Bearer ${session?.access_token}` }
-    });
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Sesion invalida');
+      }
+
+      const { error: invokeError } = await supabase.functions.invoke('manage-users', {
+        body: { action: 'toggle_status', targetUserId: userId, status: newStatus },
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+
+      if (invokeError) {
+        throw invokeError;
+      }
+    } catch (e) {
+      console.error('Error toggling owner status:', e);
+      setOwners(prev => prev.map(o => o.id === userId ? { ...o, status: currentStatus } : o));
+      setActionError('No se pudo actualizar el estado del dueño. Intenta nuevamente.');
+    }
   };
 
   return (
@@ -128,6 +169,11 @@ export default function SuperAdminDueños() {
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+        {actionError && (
+          <div className="mx-6 mt-6 p-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-sm font-medium">
+            {actionError}
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">

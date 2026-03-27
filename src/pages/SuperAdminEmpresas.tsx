@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, Search, Filter, X, UserRound, CalendarDays } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Business } from '../types';
 import { supabase } from '../lib/supabase';
 
 type AdminProfile = {
@@ -12,10 +11,30 @@ type AdminProfile = {
   role?: string;
 };
 
+type BusinessRow = {
+  id: string;
+  name: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  owner_id?: string;
+  created_at?: string;
+};
+
+type BusinessCard = BusinessRow & {
+  ownerName: string;
+};
+
+type OwnerProfile = {
+  id: string;
+  name: string;
+};
+
 const SuperAdminEmpresas = () => {
-  const [businesses, setBusinesses] = useState<any[]>([]);
+  const [businesses, setBusinesses] = useState<BusinessCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedBusiness, setSelectedBusiness] = useState<any | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedBusiness, setSelectedBusiness] = useState<BusinessCard | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [businessAdmins, setBusinessAdmins] = useState<AdminProfile[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -24,13 +43,19 @@ const SuperAdminEmpresas = () => {
     const fetchBusinesses = async () => {
       setLoading(true);
       // Fetch businesses
-      const { data: businessData, error } = await supabase.from('businesses').select('*');
+      const { data: businessData } = await supabase
+        .from('businesses')
+        .select('id, name, status, owner_id, created_at')
+        .returns<BusinessRow[]>();
       
       // Fetch profiles to map owner_id to their actual name
-      const { data: ownersData } = await supabase.from('profiles').select('id, name');
+      const { data: ownersData } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .returns<OwnerProfile[]>();
 
       if (businessData && ownersData) {
-        const enhancedBusinesses = businessData.map(b => {
+        const enhancedBusinesses: BusinessCard[] = businessData.map((b) => {
           const owner = ownersData.find(o => o.id === b.owner_id);
           return {
             ...b,
@@ -56,7 +81,7 @@ const SuperAdminEmpresas = () => {
     });
   };
 
-  const openCompanyDetails = async (business: any) => {
+  const openCompanyDetails = async (business: BusinessCard) => {
     setSelectedBusiness(business);
     setIsDetailsModalOpen(true);
     setBusinessAdmins([]);
@@ -96,6 +121,18 @@ const SuperAdminEmpresas = () => {
     setBusinessAdmins([]);
   };
 
+  const filteredBusinesses = businesses.filter((business) => {
+    const normalizedQuery = searchTerm.trim().toLowerCase();
+    const matchesQuery =
+      !normalizedQuery ||
+      business.name.toLowerCase().includes(normalizedQuery) ||
+      business.ownerName.toLowerCase().includes(normalizedQuery);
+
+    if (!matchesQuery) return false;
+    if (statusFilter === 'ALL') return true;
+    return business.status === statusFilter;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -109,29 +146,78 @@ const SuperAdminEmpresas = () => {
             <input 
               type="text" 
               placeholder="Buscar empresa..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-all">
+          <button
+            onClick={() => setShowFilters((prev) => !prev)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-all"
+          >
             <Filter size={18} />
             Filtros
           </button>
         </div>
       </div>
 
+      {showFilters && (
+        <div className="surface-card p-4 flex flex-col md:flex-row md:items-center gap-3">
+          <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Estado</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setStatusFilter('ALL')}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
+                statusFilter === 'ALL' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:bg-slate-50'
+              )}
+            >
+              Todas
+            </button>
+            <button
+              onClick={() => setStatusFilter('ACTIVE')}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
+                statusFilter === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500 hover:bg-slate-50'
+              )}
+            >
+              Activas
+            </button>
+            <button
+              onClick={() => setStatusFilter('INACTIVE')}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
+                statusFilter === 'INACTIVE' ? 'bg-rose-50 text-rose-700' : 'text-slate-500 hover:bg-slate-50'
+              )}
+            >
+              Inactivas
+            </button>
+          </div>
+          <button
+            onClick={() => {
+              setStatusFilter('ALL');
+              setSearchTerm('');
+            }}
+            className="md:ml-auto text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+          >
+            Limpiar filtros
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-20">
           <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
         </div>
-      ) : businesses.length === 0 ? (
+      ) : filteredBusinesses.length === 0 ? (
         <div className="bg-white p-10 rounded-3xl border border-slate-100 text-center">
           <Building2 size={48} className="mx-auto text-slate-300 mb-4" />
-          <h3 className="text-lg font-bold text-slate-800 mb-2">No hay empresas registradas</h3>
-          <p className="text-slate-500">Las empresas se registran automáticamente cuando creas un Dueño.</p>
+          <h3 className="text-lg font-bold text-slate-800 mb-2">No se encontraron empresas</h3>
+          <p className="text-slate-500">Ajusta el texto de busqueda o el estado seleccionado.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {businesses.map(business => (
+          {filteredBusinesses.map(business => (
             <div key={business.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
               <div className="flex justify-between items-start mb-4">
                 <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">

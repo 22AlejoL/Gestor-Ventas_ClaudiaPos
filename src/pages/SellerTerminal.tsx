@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, ShoppingCart, Trash2, Minus, Plus, Wallet, CreditCard, Smartphone } from 'lucide-react';
-import { Product, UserRole, Sale } from '../types';
+import { Business, Product, UserRole, Sale } from '../types';
 import { cn } from '../lib/utils';
 import InvoiceReceipt from '../components/common/InvoiceReceipt';
+import BusinessScopePicker from '../components/common/BusinessScopePicker';
 
 interface SellerTerminalProps {
   products: Product[];
@@ -10,10 +11,15 @@ interface SellerTerminalProps {
   role: UserRole;
   sellerId: string;
   businessName?: string;
-  onSaleComplete?: (sale: Sale) => void;
+  onSaleComplete?: (sale: Sale) => Promise<{ ok: boolean; error?: string }>;
+  ownerBusinesses?: Business[];
+  selectedBusinessId?: string;
+  onSelectedBusinessChange?: (businessId: string) => void;
+  activeBusinessId?: string;
+  requireBusinessSelection?: boolean;
 }
 
-const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, onSaleComplete }: SellerTerminalProps) => {
+const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, onSaleComplete, ownerBusinesses = [], selectedBusinessId = 'ALL', onSelectedBusinessChange, activeBusinessId, requireBusinessSelection = false }: SellerTerminalProps) => {
   const [cart, setCart] = useState<{product: Product, qty: number, overridePrice?: number}[]>([]);
   const [search, setSearch] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'DIGITAL' | null>(null);
@@ -21,11 +27,25 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
   const invoiceRef = React.useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (role !== 'OWNER') return;
+    setCart([]);
+    setPaymentMethod(null);
+  }, [selectedBusinessId, role]);
+
+  const getProductMaxQty = (productId: string, fallbackProduct: Product) => {
+    const latestProduct = products.find((p) => p.id === productId) || fallbackProduct;
+    if (latestProduct.isUnlimited) return Number.POSITIVE_INFINITY;
+    return Math.max(0, latestProduct.stock);
+  };
+
   const addToCart = (product: Product) => {
     if (!product.isUnlimited && product.stock <= 0) return;
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
+        const maxQty = getProductMaxQty(existing.product.id, existing.product);
+        if (existing.qty >= maxQty) return prev;
         return prev.map(item => item.product.id === product.id ? { ...item, qty: item.qty + 1 } : item);
       }
       return [...prev, { product, qty: 1 }];
@@ -36,7 +56,8 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
     setCart(prev => {
       return prev.map(item => {
         if (item.product.id === productId) {
-          const newQty = Math.max(0, item.qty + delta);
+          const maxQty = getProductMaxQty(item.product.id, item.product);
+          const newQty = Math.min(maxQty, Math.max(0, item.qty + delta));
           return { ...item, qty: newQty };
         }
         return item;
@@ -58,9 +79,18 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
     return acc + (price * item.qty);
   }, 0);
 
-  const handleCompleteSale = () => {
+  const handleCompleteSale = async () => {
     if (!paymentMethod) {
       alert('Por favor, selecciona un método de pago.');
+      return;
+    }
+
+    const resolvedBusinessId = role === 'OWNER'
+      ? (selectedBusinessId !== 'ALL' ? selectedBusinessId : undefined)
+      : activeBusinessId;
+
+    if ((role === 'OWNER' && requireBusinessSelection) && !resolvedBusinessId) {
+      alert('Debes seleccionar una empresa antes de completar la venta.');
       return;
     }
 
@@ -75,10 +105,16 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
         price: item.overridePrice !== undefined ? item.overridePrice : item.product.price,
       })),
       paymentMethod,
-      sellerId
+      sellerId,
+      businessId: resolvedBusinessId
     };
 
-    onSaleComplete?.(newSale); // Call the persistence callback
+    const saveResult = await onSaleComplete?.(newSale);
+    if (saveResult && !saveResult.ok) {
+      alert(saveResult.error || 'No se pudo guardar la venta. Verifica la empresa seleccionada e intenta de nuevo.');
+      return;
+    }
+
     setCart([]);
     setPaymentMethod(null); // Reset payment method
     setIsCheckoutOpen(false); // Close checkout, if it were open
@@ -104,9 +140,25 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
             placeholder="Buscar producto o código de barras..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="input-modern pl-12 pr-4 py-4 rounded-2xl bg-white shadow-sm"
           />
         </div>
+
+        {role === 'OWNER' && ownerBusinesses.length > 0 && (
+          <>
+            <BusinessScopePicker
+              businesses={ownerBusinesses}
+              selectedBusiness={selectedBusinessId}
+              onSelectBusiness={(businessId) => onSelectedBusinessChange?.(businessId)}
+              allowAll={false}
+              title="Empresa de la venta"
+              helperText="Selecciona explícitamente desde qué empresa estás vendiendo."
+            />
+            {requireBusinessSelection && selectedBusinessId === 'ALL' && (
+              <p className="text-xs text-rose-600 font-semibold px-1">Debes seleccionar una empresa para continuar.</p>
+            )}
+          </>
+        )}
 
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto pr-2">
           {products.filter(p => p.name.toLowerCase().includes(search.toLowerCase())).map(product => (
@@ -114,7 +166,7 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
               key={product.id}
               onClick={() => addToCart(product)}
               disabled={!product.isUnlimited && product.stock <= 0}
-              className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all text-left group active:scale-95 disabled:opacity-50"
+              className="surface-card p-4 hover:shadow-md transition-all text-left group active:scale-95 disabled:opacity-50"
             >
               <img src={product.image} alt={product.name} className="w-full aspect-square object-cover rounded-xl mb-3" referrerPolicy="no-referrer" />
               <h4 className="font-bold text-slate-800 line-clamp-2 mb-1">{product.name}</h4>
@@ -136,7 +188,7 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
       </div>
 
       {/* Current Order */}
-      <div className="w-full lg:w-[400px] bg-white rounded-3xl border border-slate-100 shadow-xl flex flex-col overflow-hidden">
+      <div className="w-full lg:w-[400px] surface-panel shadow-xl flex flex-col overflow-hidden">
         <div className="p-6 border-bottom border-slate-100 bg-slate-50/50">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-bold text-slate-800">Orden Actual</h3>
@@ -182,7 +234,8 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
                       <span className="px-2 text-xs font-bold text-slate-700 min-w-[20px] text-center">{item.qty}</span>
                       <button 
                         onClick={() => updateQuantity(item.product.id, 1)}
-                        className="p-1 hover:bg-slate-50 text-slate-500"
+                        disabled={!item.product.isUnlimited && item.qty >= getProductMaxQty(item.product.id, item.product)}
+                        className="p-1 hover:bg-slate-50 text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Plus size={12} />
                       </button>
@@ -255,7 +308,7 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
           <button 
             disabled={cart.length === 0}
             onClick={handleCompleteSale}
-            className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+            className="btn-primary w-full py-4 rounded-2xl text-lg"
           >
             Completar Venta
           </button>
@@ -281,13 +334,13 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
               <button
                 onClick={handleNewSale}
-                className="flex-1 py-3 px-4 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                className="btn-secondary flex-1 py-3 px-4"
               >
                 Nueva Venta
               </button>
               <button
                 onClick={handlePrint}
-                className="flex-1 py-3 px-4 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
+                className="btn-primary flex-1 py-3 px-4"
               >
                 Imprimir Ticket
               </button>

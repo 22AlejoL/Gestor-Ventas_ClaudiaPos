@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { User, UserRole } from '../../types';
 import { supabase } from '../../lib/supabase';
+import StyledDropdown from './StyledDropdown';
 
 interface ConfigurationViewProps {
   role: UserRole;
@@ -238,14 +239,14 @@ const ConfigurationView = ({ role, user, onProfileUpdated }: ConfigurationViewPr
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Idioma</label>
-              <select
+              <StyledDropdown
                 value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="es-MX">Español (México)</option>
-                <option value="en-US">English (US)</option>
-              </select>
+                onChange={setLanguage}
+                options={[
+                  { value: 'es-MX', label: 'Español (México)' },
+                  { value: 'en-US', label: 'English (US)' }
+                ]}
+              />
             </div>
           </div>
         </div>

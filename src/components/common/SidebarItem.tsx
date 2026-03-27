@@ -1,8 +1,9 @@
 import React from 'react';
+import { LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface SidebarItemProps {
-  icon: any;
+  icon: LucideIcon;
   label: string;
   active: boolean;
   onClick: () => void;
@@ -13,10 +14,10 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, active, on
   <button
     onClick={onClick}
     className={cn(
-      "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
+      "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group border",
       active 
-        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200" 
-        : "text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
+        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200 border-indigo-500" 
+        : "text-slate-500 border-transparent hover:bg-white hover:text-indigo-600 hover:border-indigo-100 hover:shadow-sm"
     )}
   >
     <Icon size={20} className={cn(active ? "text-white" : "text-slate-400 group-hover:text-indigo-600")} />

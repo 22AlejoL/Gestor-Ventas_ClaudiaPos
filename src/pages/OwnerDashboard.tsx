@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { 
   AreaChart as ReAreaChart, 
   Area as ReArea, 
@@ -12,41 +12,17 @@ import { DollarSign, Wallet, Package, XCircle, AlertCircle, Download, Building2 
 import StatCard from '../components/common/StatCard';
 import { Product, Sale, Business } from '../types';
 import { cn } from '../lib/utils';
-import { supabase } from '../lib/supabase';
+import BusinessScopePicker from '../components/common/BusinessScopePicker';
 
 interface OwnerDashboardProps {
   products: Product[];
   sales: Sale[];
+  businesses: Business[];
+  selectedBusiness: string;
+  onSelectBusiness: (businessId: string) => void;
 }
 
-const OwnerDashboard = ({ products, sales }: OwnerDashboardProps) => {
-  const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [selectedBusiness, setSelectedBusiness] = useState<string>('ALL');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchCompanies = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const { data } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('owner_id', session.user.id);
-        
-      if (data) {
-        setBusinesses(data.map(d => ({
-          id: d.id,
-          name: d.name,
-          ownerId: d.owner_id,
-          status: d.status
-        })));
-      }
-      setLoading(false);
-    };
-
-    fetchCompanies();
-  }, []);
+const OwnerDashboard = ({ products, sales, businesses, selectedBusiness, onSelectBusiness }: OwnerDashboardProps) => {
 
   // Filter products and sales based on selected business
   const filteredProducts = useMemo(() => {
@@ -106,38 +82,27 @@ const OwnerDashboard = ({ products, sales }: OwnerDashboardProps) => {
     ];
   }, [filteredSales]);
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-20">
-         <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Dashboard de Propietario</h2>
-          <p className="text-slate-500">Resumen y analíticas de tus operaciones</p>
+          <h2 className="section-title">Dashboard de Propietario</h2>
+          <p className="section-subtitle">Resumen y analíticas de tus operaciones</p>
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
-            <Building2 size={18} className="text-slate-400" />
-            <select
-              value={selectedBusiness}
-              onChange={(e) => setSelectedBusiness(e.target.value)}
-              className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none cursor-pointer"
-            >
-              <option value="ALL">Consolidado Global (Todas)</option>
-              {businesses.map(b => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
+          <div className="w-full md:w-auto min-w-[320px]">
+            <BusinessScopePicker
+              businesses={businesses}
+              selectedBusiness={selectedBusiness}
+              onSelectBusiness={onSelectBusiness}
+              title="Vista de empresas"
+              allLabel="Consolidado Global"
+              className="py-3"
+            />
           </div>
 
-          <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 whitespace-nowrap">
+          <button className="btn-primary whitespace-nowrap">
             <Download size={18} />
             <span className="hidden md:inline">Reporte Mensual</span>
           </button>
@@ -166,7 +131,7 @@ const OwnerDashboard = ({ products, sales }: OwnerDashboardProps) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+        <div className="surface-panel p-6">
           <h3 className="font-bold text-slate-800 mb-6">Ingresos Brutos por Día</h3>
           <div className="h-80">
             <ReResponsiveContainer width="100%" height="100%">
@@ -190,7 +155,7 @@ const OwnerDashboard = ({ products, sales }: OwnerDashboardProps) => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+        <div className="surface-panel p-6">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-bold text-slate-800">Alertas de Inventario</h3>
             <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">

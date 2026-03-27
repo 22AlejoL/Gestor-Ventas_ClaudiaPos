@@ -7,9 +7,12 @@ export default function Landing() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="min-h-screen bg-transparent font-sans selection:bg-indigo-100 selection:text-indigo-900 relative overflow-hidden">
+      <div className="absolute -top-40 -left-24 w-[520px] h-[520px] rounded-full bg-indigo-200/40 blur-3xl" />
+      <div className="absolute top-24 -right-32 w-[560px] h-[560px] rounded-full bg-cyan-200/35 blur-3xl" />
+      <div className="absolute -bottom-32 left-1/3 w-[420px] h-[420px] rounded-full bg-sky-100/60 blur-3xl" />
       {/* Navbar */}
-      <nav className="fixed w-full top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
+      <nav className="fixed w-full top-0 z-50 bg-white/75 backdrop-blur-md border-b border-slate-200/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center gap-3">
@@ -27,7 +30,7 @@ export default function Landing() {
               </button>
               <button 
                 onClick={() => navigate('/login')}
-                className="bg-indigo-600 text-white px-6 py-2.5 rounded-full font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95 flex items-center gap-2"
+                className="btn-primary px-6 py-2.5 rounded-full"
               >
                 Empezar <ArrowRight size={18} />
               </button>
@@ -37,41 +40,54 @@ export default function Landing() {
       </nav>
 
       {/* Hero Section */}
-      <div className="relative pt-32 pb-20 sm:pt-40 sm:pb-24 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+      <div className="relative pt-32 pb-20 sm:pt-40 sm:pb-24 overflow-hidden z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
+            className="surface-panel p-8 sm:p-12"
           >
             <span className="inline-block py-1 px-3 rounded-full bg-indigo-50 text-indigo-600 font-semibold text-sm mb-6 border border-indigo-100">
               Versión 2.0 ya disponible 🎉
             </span>
-            <h1 className="text-5xl sm:text-7xl font-extrabold text-slate-900 tracking-tight mb-8">
+            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold text-slate-900 tracking-tight mb-8 text-center">
               Gestiona tus ventas con <br className="hidden sm:block" />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-500">
                 inteligencia y velocidad
               </span>
             </h1>
-            <p className="text-xl text-slate-500 max-w-2xl mx-auto mb-10 leading-relaxed">
+            <p className="text-lg sm:text-xl text-slate-500 max-w-2xl mx-auto mb-10 leading-relaxed text-center">
               El punto de venta más moderno e intuitivo. Controla tu inventario, visualiza reportes en tiempo real y aumenta tus ganancias sin complicaciones.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
               <button 
                 onClick={() => navigate('/login')}
-                className="w-full sm:w-auto px-8 py-4 bg-indigo-600 text-white rounded-full font-bold text-lg hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                className="btn-primary w-full sm:w-auto px-8 py-4 rounded-full text-lg"
               >
                 Probar Gratis <ArrowRight size={20} />
               </button>
-              <button className="w-full sm:w-auto px-8 py-4 bg-white text-slate-700 border border-slate-200 rounded-full font-bold text-lg hover:bg-slate-50 transition-all active:scale-95">
+              <button className="btn-secondary w-full sm:w-auto px-8 py-4 rounded-full text-lg">
                 Ver Demo
               </button>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="surface-card p-4 text-center">
+                <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Empresas activas</p>
+                <p className="text-2xl font-extrabold text-slate-800 mt-1">+120</p>
+              </div>
+              <div className="surface-card p-4 text-center">
+                <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Transacciones</p>
+                <p className="text-2xl font-extrabold text-slate-800 mt-1">1.4M</p>
+              </div>
+              <div className="surface-card p-4 text-center">
+                <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Disponibilidad</p>
+                <p className="text-2xl font-extrabold text-slate-800 mt-1">99.9%</p>
+              </div>
+            </div>
           </motion.div>
         </div>
-        
-        {/* Background Decorations */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-50 rounded-full blur-3xl opacity-50 -z-10"></div>
       </div>
 
       {/* Features Section */}

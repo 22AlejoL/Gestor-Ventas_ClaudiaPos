@@ -27,11 +27,13 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-transparent relative overflow-hidden flex items-center justify-center p-4">
+      <div className="absolute -top-20 -left-20 w-80 h-80 rounded-full bg-indigo-200/30 blur-3xl" />
+      <div className="absolute -bottom-24 -right-16 w-96 h-96 rounded-full bg-cyan-200/30 blur-3xl" />
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white w-full max-w-md p-8 rounded-3xl shadow-xl border border-slate-100"
+        className="surface-panel w-full max-w-md p-8 shadow-xl relative z-10"
       >
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-200">
@@ -51,7 +53,7 @@ const Login = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="ejemplo@claudia.pos"
-                className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                className="input-modern pl-12 pr-4 py-3"
                 required
               />
             </div>
@@ -66,7 +68,7 @@ const Login = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                className="input-modern pl-12 pr-4 py-3"
                 required
               />
             </div>
@@ -81,7 +83,7 @@ const Login = () => {
           <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 disabled:opacity-50"
+            className="btn-primary w-full py-3 text-lg"
           >
             {loading ? 'Iniciando...' : 'Iniciar Sesión'}
           </button>
