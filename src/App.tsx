@@ -115,8 +115,7 @@ export default function App() {
       setProducts(updatedProducts);
     } catch (error) {
       console.error('Error saving sale:', error);
-      // Even if API fails, update local state to keep UI snappy
-      setSales(prev => [...prev, sale]);
+      throw error;
     }
   };
 
@@ -157,7 +156,7 @@ export default function App() {
               <Route path="/ventas" element={<SellerTerminal products={products} setProducts={handleUpdateProducts} role={user.role} sellerId={user.id} businessName={user.businessName} onSaleComplete={handleAddSale} />} />
               <Route path="/resumen" element={<SellerSummary sales={sales} role={user.role} sellerId={user.id} />} />
               <Route path="/inventario" element={<SellerInventory products={products} />} />
-              <Route path="/configuracion" element={<ConfigurationView role={user.role} />} />
+              <Route path="/configuracion" element={<ConfigurationView role={user.role} user={user} />} />
               <Route path="*" element={<Navigate to="/ventas" />} />
             </>
           )}
@@ -166,10 +165,10 @@ export default function App() {
           {user.role === 'OWNER' && (
             <>
               <Route path="/dashboard" element={<OwnerDashboard products={products} sales={sales} />} />
-              <Route path="/ventas" element={<SellerTerminal products={products} setProducts={handleUpdateProducts} role={user.role} sellerId={user.id} onSaleComplete={handleAddSale} />} />
+              <Route path="/ventas" element={<SellerTerminal products={products} setProducts={handleUpdateProducts} role={user.role} sellerId={user.id} businessId={user.businessId} onSaleComplete={handleAddSale} />} />
               <Route path="/reportes" element={<OwnerReports sales={sales} />} />
               <Route path="/inventario" element={<AdminInventory products={products} setProducts={handleUpdateProducts} user={user} />} />
-              <Route path="/configuracion" element={<ConfigurationView role={user.role} />} />
+              <Route path="/configuracion" element={<ConfigurationView role={user.role} user={user} />} />
               <Route path="*" element={<Navigate to="/dashboard" />} />
             </>
           )}
@@ -181,7 +180,7 @@ export default function App() {
               <Route path="/dueños" element={<SuperAdminDueños />} />
               <Route path="/vendedores" element={<SuperAdminSellers />} />
               <Route path="/empresas" element={<SuperAdminEmpresas businesses={MOCK_BUSINESSES} />} />
-              <Route path="/sistema" element={<ConfigurationView role={user.role} />} />
+              <Route path="/sistema" element={<ConfigurationView role={user.role} user={user} />} />
               <Route path="*" element={<Navigate to="/panel" />} />
             </>
           )}
