@@ -1,12 +1,12 @@
-import React, { useMemo } from 'react';
-import { 
-  AreaChart as ReAreaChart, 
-  Area as ReArea, 
-  XAxis as ReXAxis, 
-  YAxis as ReYAxis, 
-  CartesianGrid as ReCartesianGrid, 
-  Tooltip as ReTooltip, 
-  ResponsiveContainer as ReResponsiveContainer 
+import React, { useMemo, useState } from 'react';
+import {
+  AreaChart as ReAreaChart,
+  Area as ReArea,
+  XAxis as ReXAxis,
+  YAxis as ReYAxis,
+  CartesianGrid as ReCartesianGrid,
+  Tooltip as ReTooltip,
+  ResponsiveContainer as ReResponsiveContainer
 } from 'recharts';
 import { DollarSign, Wallet, Package, XCircle, AlertCircle, Download, Building2 } from 'lucide-react';
 import StatCard from '../components/common/StatCard';
@@ -23,6 +23,7 @@ interface OwnerDashboardProps {
 }
 
 const OwnerDashboard = ({ products, sales, businesses, selectedBusiness, onSelectBusiness }: OwnerDashboardProps) => {
+  const [dayRange, setDayRange] = useState<7 | 14 | 30>(7);
 
   // Filter products and sales based on selected business
   const filteredProducts = useMemo(() => {
@@ -62,25 +63,42 @@ const OwnerDashboard = ({ products, sales, businesses, selectedBusiness, onSelec
     return { totalRevenue, netProfit, lowStockProducts };
   }, [filteredSales, filteredProducts, products]);
 
-  // Chart Data: Group sales by day of week
+  // Chart Data: Dynamic days range including today
   const chartData = useMemo(() => {
     const days = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
-    const dataMap = new Map();
-    days.forEach(d => dataMap.set(d, { name: d, ventas: 0 }));
+    const data = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    filteredSales.forEach(sale => {
-      const date = new Date(sale.date);
+    // Generate days based on selected range
+    for (let i = dayRange - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+
       const dayName = days[date.getDay()];
-      const current = dataMap.get(dayName);
-      current.ventas += sale.total;
-    });
+      const dateStr = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    // Reorder starting from Monday
-    return [
-      dataMap.get('Lun'), dataMap.get('Mar'), dataMap.get('Mie'),
-      dataMap.get('Jue'), dataMap.get('Vie'), dataMap.get('Sab'), dataMap.get('Dom')
-    ];
-  }, [filteredSales]);
+      // Calculate total sales for this day
+      const dayTotal = filteredSales.reduce((sum, sale) => {
+        const saleDate = new Date(sale.date);
+        saleDate.setHours(0, 0, 0, 0);
+
+        if (saleDate.getTime() === date.getTime()) {
+          return sum + sale.total;
+        }
+        return sum;
+      }, 0);
+
+      data.push({
+        dayLabel: dayName,
+        fullDate: dateStr,
+        ventas: dayTotal,
+        date: date
+      });
+    }
+
+    return data;
+  }, [filteredSales, dayRange]);
 
   return (
     <div className="space-y-6">
@@ -132,7 +150,25 @@ const OwnerDashboard = ({ products, sales, businesses, selectedBusiness, onSelec
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="surface-panel p-6">
-          <h3 className="font-bold text-slate-800 mb-6">Ingresos Brutos por Día</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-slate-800">Ingresos Brutos - Últimos {dayRange} Días</h3>
+            <div className="flex bg-slate-100 rounded-lg p-1">
+              {[7, 14, 30].map((days) => (
+                <button
+                  key={days}
+                  onClick={() => setDayRange(days as 7 | 14 | 30)}
+                  className={cn(
+                    "px-3 py-1 text-sm font-medium rounded-md transition-all",
+                    dayRange === days
+                      ? "bg-white text-indigo-600 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700"
+                  )}
+                >
+                  {days}d
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="h-80">
             <ReResponsiveContainer width="100%" height="100%">
               <ReAreaChart data={chartData}>
@@ -143,11 +179,17 @@ const OwnerDashboard = ({ products, sales, businesses, selectedBusiness, onSelec
                   </linearGradient>
                 </defs>
                 <ReCartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <ReXAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
+                <ReXAxis dataKey="dayLabel" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
                 <ReYAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} tickFormatter={(v) => `$${v}`} />
-                <ReTooltip 
+                <ReTooltip
                   contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
                   formatter={(value: number) => [`$${value.toLocaleString()}`, 'Ingresos']}
+                  labelFormatter={(label, payload) => {
+                    if (payload && payload.length > 0) {
+                      return payload[0].payload.fullDate;
+                    }
+                    return label;
+                  }}
                 />
                 <ReArea type="monotone" dataKey="ventas" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorVentas)" />
               </ReAreaChart>

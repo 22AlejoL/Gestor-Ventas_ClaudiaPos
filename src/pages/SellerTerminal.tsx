@@ -25,6 +25,7 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'DIGITAL' | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
+  const [cashReceived, setCashReceived] = useState<string>('');
   const invoiceRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -79,6 +80,12 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
     return acc + (price * item.qty);
   }, 0);
 
+  const change = paymentMethod === 'CASH' && cashReceived 
+    ? Math.max(0, parseFloat(cashReceived) - total)
+    : 0;
+
+  const isCashPaymentValid = paymentMethod !== 'CASH' || (parseFloat(cashReceived) || 0) >= total;
+
   const handleCompleteSale = async () => {
     if (!paymentMethod) {
       alert('Por favor, selecciona un método de pago.');
@@ -118,6 +125,7 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
     setCart([]);
     setPaymentMethod(null); // Reset payment method
     setIsCheckoutOpen(false); // Close checkout, if it were open
+    setCashReceived(''); // Reset cash received
     setCompletedSale(newSale);
   };
 
@@ -127,6 +135,8 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
 
   const handleNewSale = () => {
     setCompletedSale(null);
+    setCashReceived('');
+    setPaymentMethod(null);
   };
 
   return (
@@ -274,7 +284,10 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
 
           <div className="grid grid-cols-3 gap-2">
             <button 
-              onClick={() => setPaymentMethod('CASH')}
+              onClick={() => {
+                setPaymentMethod('CASH');
+                setCashReceived('');
+              }}
               className={cn(
                 "flex flex-col items-center gap-1 p-3 rounded-xl border transition-all group",
                 paymentMethod === 'CASH' ? "border-indigo-500 bg-indigo-50 text-indigo-600" : "border-slate-200 bg-white hover:border-indigo-500 hover:text-indigo-600"
@@ -284,7 +297,10 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
               <span className="text-[10px] font-bold">Efectivo</span>
             </button>
             <button 
-              onClick={() => setPaymentMethod('CARD')}
+              onClick={() => {
+                setPaymentMethod('CARD');
+                setCashReceived('');
+              }}
               className={cn(
                 "flex flex-col items-center gap-1 p-3 rounded-xl border transition-all group",
                 paymentMethod === 'CARD' ? "border-indigo-500 bg-indigo-50 text-indigo-600" : "border-slate-200 bg-white hover:border-indigo-500 hover:text-indigo-600"
@@ -294,7 +310,10 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
               <span className="text-[10px] font-bold">Tarjeta</span>
             </button>
             <button 
-              onClick={() => setPaymentMethod('DIGITAL')}
+              onClick={() => {
+                setPaymentMethod('DIGITAL');
+                setCashReceived('');
+              }}
               className={cn(
                 "flex flex-col items-center gap-1 p-3 rounded-xl border transition-all group",
                 paymentMethod === 'DIGITAL' ? "border-indigo-500 bg-indigo-50 text-indigo-600" : "border-slate-200 bg-white hover:border-indigo-500 hover:text-indigo-600"
@@ -305,12 +324,54 @@ const SellerTerminal = ({ products, setProducts, role, sellerId, businessName, o
             </button>
           </div>
 
+          {/* Cash Calculator */}
+          {paymentMethod === 'CASH' && (
+            <div className="space-y-3 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Valor recibido
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                  <input
+                    type="number"
+                    value={cashReceived}
+                    onChange={(e) => setCashReceived(e.target.value)}
+                    placeholder="0.00"
+                    min={total}
+                    step="0.01"
+                    className="w-full pl-10 pr-4 py-3 text-lg font-bold text-slate-800 bg-white border-2 border-indigo-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              
+              {change > 0 && (
+                <div className="flex items-center justify-between p-3 bg-emerald-100 rounded-xl">
+                  <span className="text-sm font-medium text-emerald-700">Cambio a devolver:</span>
+                  <span className="text-2xl font-bold text-emerald-700">
+                    ${change.toFixed(2)}
+                  </span>
+                </div>
+              )}
+              
+              {(parseFloat(cashReceived) || 0) < total && cashReceived !== '' && (
+                <div className="flex items-center gap-2 text-rose-600 text-sm">
+                  <span className="text-lg">⚠️</span>
+                  El monto recibido es menor al total
+                </div>
+              )}
+            </div>
+          )}
+
           <button 
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || !paymentMethod || !isCashPaymentValid}
             onClick={handleCompleteSale}
-            className="btn-primary w-full py-4 rounded-2xl text-lg"
+            className="btn-primary w-full py-4 rounded-2xl text-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Completar Venta
+            {paymentMethod === 'CASH' && !isCashPaymentValid 
+              ? 'Monto insuficiente' 
+              : 'Completar Venta'}
           </button>
         </div>
       </div>

@@ -47,3 +47,40 @@ export interface Business {
   ownerId: string;
   status: 'ACTIVE' | 'INACTIVE';
 }
+
+// Cash Register Types
+export interface CashRegisterOpening {
+  id: string;
+  sellerId: string;
+  sellerName?: string;
+  businessId?: string;
+  date: string;
+  initialAmount: number;
+  createdAt: string;
+}
+
+export interface CashRegisterClosure {
+  id: string;
+  sellerId: string;
+  sellerName?: string;
+  businessId?: string;
+  date: string;
+  openingId: string;
+  initialAmount: number;
+  finalAmount: number;
+  expenses: number;
+  expensesDetails?: string;
+  difference: number;
+  paymentBreakdown: {
+    cash: number;
+    card: number;
+    digital: number;
+  };
+  totalSales: number;
+  createdAt: string;
+}
+
+export interface Expense {
+  description: string;
+  amount: number;
+}

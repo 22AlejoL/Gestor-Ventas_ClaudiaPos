@@ -1,10 +1,46 @@
-import { Product, Sale, Business } from '../types';
+import { Product, Sale, Business, CashRegisterOpening, CashRegisterClosure } from '../types';
 import { supabase } from '../lib/supabase';
 
 const DATA_SOURCE = (import.meta.env.VITE_DATA_SOURCE ?? 'supabase').toLowerCase();
 const LOCAL_API_BASE = import.meta.env.VITE_LOCAL_API_BASE_URL ?? 'http://localhost:3001';
 
 const useLocalApi = () => DATA_SOURCE === 'local';
+
+// Helper functions for localStorage fallback
+const getLocalStorageKey = (sellerId: string, date: string) => `cash_opening_${sellerId}_${date}`;
+const getLocalStorageClosureKey = (sellerId: string, date: string) => `cash_closure_${sellerId}_${date}`;
+
+const saveOpeningToLocalStorage = (opening: Omit<CashRegisterOpening, 'id' | 'createdAt'>): CashRegisterOpening => {
+    const id = `local_${Date.now()}`;
+    const newOpening: CashRegisterOpening = {
+        ...opening,
+        id,
+        createdAt: new Date().toISOString()
+    };
+    localStorage.setItem(getLocalStorageKey(opening.sellerId, opening.date), JSON.stringify(newOpening));
+    return newOpening;
+};
+
+const getOpeningFromLocalStorage = (sellerId: string, date: string): CashRegisterOpening | null => {
+    const data = localStorage.getItem(getLocalStorageKey(sellerId, date));
+    return data ? JSON.parse(data) : null;
+};
+
+const saveClosureToLocalStorage = (closure: Omit<CashRegisterClosure, 'id' | 'createdAt'>): CashRegisterClosure => {
+    const id = `local_${Date.now()}`;
+    const newClosure: CashRegisterClosure = {
+        ...closure,
+        id,
+        createdAt: new Date().toISOString()
+    };
+    localStorage.setItem(getLocalStorageClosureKey(closure.sellerId, closure.date), JSON.stringify(newClosure));
+    return newClosure;
+};
+
+const getClosureFromLocalStorage = (sellerId: string, date: string): CashRegisterClosure | null => {
+    const data = localStorage.getItem(getLocalStorageClosureKey(sellerId, date));
+    return data ? JSON.parse(data) : null;
+};
 
 const getErrorMessage = (error: unknown) => {
     if (!error) return 'Error desconocido al procesar la venta.';
@@ -286,5 +322,177 @@ export const api = {
         }
 
         return sale;
+    },
+
+    // Cash Register Operations
+    async getTodayOpening(sellerId: string, businessId?: string): Promise<CashRegisterOpening | null> {
+        const today = new Date().toISOString().split('T')[0];
+        
+        try {
+            const { data, error } = await supabase
+                .from('cash_register_openings')
+                .select('*')
+                .eq('seller_id', sellerId)
+                .eq('date', today)
+                .maybeSingle();
+            
+            if (data) {
+                return {
+                    id: data.id,
+                    sellerId: data.seller_id,
+                    sellerName: data.seller_name,
+                    businessId: data.business_id,
+                    date: data.date,
+                    initialAmount: data.initial_amount,
+                    createdAt: data.created_at
+                };
+            }
+        } catch (err) {
+            console.log('Supabase error, falling back to localStorage');
+        }
+        
+        // Fallback to localStorage
+        return getOpeningFromLocalStorage(sellerId, today);
+    },
+
+    async createOpening(opening: Omit<CashRegisterOpening, 'id' | 'createdAt'>): Promise<CashRegisterOpening> {
+        try {
+            const { data, error } = await supabase
+                .from('cash_register_openings')
+                .insert({
+                    seller_id: opening.sellerId,
+                    seller_name: opening.sellerName,
+                    business_id: opening.businessId,
+                    date: opening.date,
+                    initial_amount: opening.initialAmount
+                })
+                .select()
+                .single();
+            
+            if (error) {
+                // If table doesn't exist or schema cache error, fall back to localStorage
+                if (error.message?.includes('does not exist') || 
+                    error.message?.includes('schema cache') ||
+                    error.code === '42P01' || 
+                    error.code === 'PGRST116') {
+                    console.log('Table not found in Supabase, using localStorage fallback');
+                    return saveOpeningToLocalStorage(opening);
+                }
+                throw new Error(getErrorMessage(error));
+            }
+            
+            // Also save to localStorage as backup
+            saveOpeningToLocalStorage(opening);
+            
+            return {
+                id: data.id,
+                sellerId: data.seller_id,
+                sellerName: data.seller_name,
+                businessId: data.business_id,
+                date: data.date,
+                initialAmount: data.initial_amount,
+                createdAt: data.created_at
+            };
+        } catch (err: any) {
+            // If any error occurs, try localStorage fallback silently
+            console.log('Supabase error, using localStorage fallback:', err?.message);
+            return saveOpeningToLocalStorage(opening);
+        }
+    },
+
+    async createClosure(closure: Omit<CashRegisterClosure, 'id' | 'createdAt'>): Promise<CashRegisterClosure> {
+        try {
+            const { data, error } = await supabase
+                .from('cash_register_closures')
+                .insert({
+                    seller_id: closure.sellerId,
+                    seller_name: closure.sellerName,
+                    business_id: closure.businessId,
+                    date: closure.date,
+                    opening_id: closure.openingId,
+                    initial_amount: closure.initialAmount,
+                    final_amount: closure.finalAmount,
+                    expenses: closure.expenses,
+                    expenses_details: closure.expensesDetails,
+                    difference: closure.difference,
+                    payment_breakdown: closure.paymentBreakdown,
+                    total_sales: closure.totalSales
+                })
+                .select()
+                .single();
+            
+            if (error) {
+                // If table doesn't exist or schema cache error, fall back to localStorage
+                if (error.message?.includes('does not exist') || 
+                    error.message?.includes('schema cache') ||
+                    error.code === '42P01' || 
+                    error.code === 'PGRST116') {
+                    console.log('Table not found in Supabase, using localStorage fallback');
+                    return saveClosureToLocalStorage(closure);
+                }
+                throw new Error(getErrorMessage(error));
+            }
+            
+            // Also save to localStorage as backup
+            saveClosureToLocalStorage(closure);
+            
+            return {
+                id: data.id,
+                sellerId: data.seller_id,
+                sellerName: data.seller_name,
+                businessId: data.business_id,
+                date: data.date,
+                openingId: data.opening_id,
+                initialAmount: data.initial_amount,
+                finalAmount: data.final_amount,
+                expenses: data.expenses,
+                expensesDetails: data.expenses_details,
+                difference: data.difference,
+                paymentBreakdown: data.payment_breakdown,
+                totalSales: data.total_sales,
+                createdAt: data.created_at
+            };
+        } catch (err: any) {
+            // If any error occurs, try localStorage fallback silently
+            console.log('Supabase error, using localStorage fallback:', err?.message);
+            return saveClosureToLocalStorage(closure);
+        }
+    },
+
+    async getTodayClosure(sellerId: string): Promise<CashRegisterClosure | null> {
+        const today = new Date().toISOString().split('T')[0];
+        
+        try {
+            const { data, error } = await supabase
+                .from('cash_register_closures')
+                .select('*')
+                .eq('seller_id', sellerId)
+                .eq('date', today)
+                .maybeSingle();
+            
+            if (data) {
+                return {
+                    id: data.id,
+                    sellerId: data.seller_id,
+                    sellerName: data.seller_name,
+                    businessId: data.business_id,
+                    date: data.date,
+                    openingId: data.opening_id,
+                    initialAmount: data.initial_amount,
+                    finalAmount: data.final_amount,
+                    expenses: data.expenses,
+                    expensesDetails: data.expenses_details,
+                    difference: data.difference,
+                    paymentBreakdown: data.payment_breakdown,
+                    totalSales: data.total_sales,
+                    createdAt: data.created_at
+                };
+            }
+        } catch (err) {
+            console.log('Supabase error, falling back to localStorage');
+        }
+        
+        // Fallback to localStorage
+        return getClosureFromLocalStorage(sellerId, today);
     }
 };

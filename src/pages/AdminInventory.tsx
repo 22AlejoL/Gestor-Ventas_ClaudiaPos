@@ -125,7 +125,7 @@ const AdminInventory = ({ products, setProducts, user, businesses, selectedBusin
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="admin-inventory-container">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="section-title">Inventario y Rentabilidad</h2>
@@ -149,6 +149,7 @@ const AdminInventory = ({ products, setProducts, user, businesses, selectedBusin
           <button 
             onClick={handleAddNew}
             className="btn-primary"
+            data-testid="add-product-button"
           >
             <Plus size={18} />
             Nuevo Producto
@@ -193,7 +194,7 @@ const AdminInventory = ({ products, setProducts, user, businesses, selectedBusin
               Sin Stock
             </button>
             <div className="w-56">
-              <StyledDropdown
+              <StyledDropdown data-testid="category-filter"
                 value={categoryFilter}
                 onChange={setCategoryFilter}
                 options={[
@@ -210,7 +211,7 @@ const AdminInventory = ({ products, setProducts, user, businesses, selectedBusin
               placeholder="Buscar producto..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-modern pl-10"
+              className="input-modern pl-10" data-testid="search-input"
             />
           </div>
         </div>
@@ -297,7 +298,7 @@ const AdminInventory = ({ products, setProducts, user, businesses, selectedBusin
                 {businesses.length > 1 && (
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Empresa Destino</label>
-                    <StyledDropdown
+                    <StyledDropdown data-testid="category-filter"
                       value={modalBusinessId}
                       onChange={setModalBusinessId}
                       searchable
@@ -307,7 +308,7 @@ const AdminInventory = ({ products, setProducts, user, businesses, selectedBusin
                 )}
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Categoría</label>
-                  <StyledDropdown
+                  <StyledDropdown data-testid="category-filter"
                     value={modalCategory}
                     onChange={setModalCategory}
                     options={availableCategories.map((category) => ({ value: category, label: category }))}

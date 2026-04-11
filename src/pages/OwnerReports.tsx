@@ -1,9 +1,10 @@
 import React from 'react';
-import { Download, ArrowUpRight, ArrowDownRight, History, CalendarDays } from 'lucide-react';
+import { Download, ArrowUpRight, ArrowDownRight, History, CalendarDays, BarChart3, Calendar } from 'lucide-react';
 import { Business, Sale } from '../types';
 import SalesHistoryModal from '../components/common/SalesHistoryModal';
 import BusinessScopePicker from '../components/common/BusinessScopePicker';
 import StyledDropdown from '../components/common/StyledDropdown';
+import DailyReport from '../components/common/DailyReport';
 import { 
   LineChart, 
   Line, 
@@ -27,6 +28,7 @@ interface OwnerReportsProps {
 const OwnerReports = ({ sales, businesses, selectedBusiness, onSelectBusiness }: OwnerReportsProps) => {
   const [showHistoryModal, setShowHistoryModal] = React.useState(false);
   const [reportRange, setReportRange] = React.useState('LAST_6_MONTHS');
+  const [activeTab, setActiveTab] = React.useState<'general' | 'daily'>('general');
 
   const reportRangeLabelMap: Record<string, string> = {
     LAST_6_MONTHS: 'Ultimos 6 meses',
@@ -145,12 +147,40 @@ const OwnerReports = ({ sales, businesses, selectedBusiness, onSelectBusiness }:
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
-        <div className="xl:min-h-[166px] flex flex-col justify-center">
-          <h2 className="section-title">Reportes de Rendimiento</h2>
-          <p className="section-subtitle">Análisis detallado de ventas y rentabilidad basado en registros reales</p>
-        </div>
-        <div className="flex gap-3 items-center flex-wrap justify-start xl:justify-end">
+      {/* Tabs de navegación */}
+      <div className="flex items-center gap-2 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab('general')}
+          className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-colors border-b-2 ${
+            activeTab === 'general'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <BarChart3 size={18} />
+          General
+        </button>
+        <button
+          onClick={() => setActiveTab('daily')}
+          className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-colors border-b-2 ${
+            activeTab === 'daily'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Calendar size={18} />
+          Ingreso Diario
+        </button>
+      </div>
+
+      {activeTab === 'general' ? (
+        <>
+          <div className="flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
+            <div className="xl:min-h-[166px] flex flex-col justify-center">
+              <h2 className="section-title">Reportes de Rendimiento</h2>
+              <p className="section-subtitle">Análisis detallado de ventas y rentabilidad basado en registros reales</p>
+            </div>
+            <div className="flex gap-3 items-center flex-wrap justify-start xl:justify-end">
           <div className="w-full md:w-auto min-w-[320px]">
             <BusinessScopePicker
               businesses={businesses}
@@ -287,12 +317,20 @@ const OwnerReports = ({ sales, businesses, selectedBusiness, onSelectBusiness }:
         </div>
       </div>
 
-      {showHistoryModal && (
-        <SalesHistoryModal 
-          sales={visibleSales} 
-          role="OWNER" 
+          {showHistoryModal && (
+            <SalesHistoryModal 
+              sales={visibleSales} 
+              role="OWNER" 
+              businesses={businesses}
+              onClose={() => setShowHistoryModal(false)} 
+            />
+          )}
+        </>
+      ) : (
+        <DailyReport 
+          sales={salesByBusiness}
+          role="OWNER"
           businesses={businesses}
-          onClose={() => setShowHistoryModal(false)} 
         />
       )}
     </div>
