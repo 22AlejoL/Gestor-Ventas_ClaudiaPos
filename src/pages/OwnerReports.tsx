@@ -23,6 +23,13 @@ import {
   Cell 
 } from 'recharts';
 
+// Helper para comparar días en Bogotá (a nivel de módulo para no recrear en cada render)
+const isSameDayBogota = (date1: Date, date2: Date): boolean => {
+  const bogota1 = date1.toLocaleDateString('en-US', { timeZone: 'America/Bogota' });
+  const bogota2 = date2.toLocaleDateString('en-US', { timeZone: 'America/Bogota' });
+  return bogota1 === bogota2;
+};
+
 interface OwnerReportsProps {
   sales: Sale[];
   businesses: Business[];
@@ -208,68 +215,68 @@ const OwnerReports = ({ sales, businesses, selectedBusiness, onSelectBusiness }:
     };
   }, [visibleSales, reportRange]);
 
-  // Helper para comparar días en Bogotá
-  const isSameDayBogota = (date1: Date, date2: Date): boolean => {
-    const bogota1 = date1.toLocaleDateString('en-US', { timeZone: 'America/Bogota' });
-    const bogota2 = date2.toLocaleDateString('en-US', { timeZone: 'America/Bogota' });
-    return bogota1 === bogota2;
-  };
-
   return (
     <div className="space-y-6">
-      <div className="flex flex-col xl:flex-row xl:justify-between xl:items-start gap-4">
-        <div className="flex-shrink-0">
+      {/* Header Section */}
+      <div className="space-y-4">
+        {/* Title */}
+        <div>
           <h2 className="section-title">Reportes de Rendimiento</h2>
           <p className="section-subtitle">Análisis detallado de ventas y rentabilidad basado en registros reales</p>
         </div>
-        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-start">
-          <div className="w-full lg:w-auto min-w-[280px] lg:min-w-[320px]">
+        
+        {/* Controls Grid - Responsive layout */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          {/* Business Selector */}
+          <div className="w-full">
             <BusinessScopePicker
               businesses={businesses}
               selectedBusiness={selectedBusiness}
               onSelectBusiness={onSelectBusiness}
               title="Vista de empresas"
               allLabel="Consolidado Global"
-              className="h-auto lg:h-[166px]"
+              className="h-auto"
             />
           </div>
-          <div className="surface-card p-4 min-w-[280px] lg:min-w-[320px]">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Periodo del reporte</p>
-              </div>
-              <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                <CalendarDays size={18} />
+          
+          {/* Period Selector */}
+          <div className="surface-card p-4 w-full">
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Periodo del reporte</p>
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <CalendarDays size={16} />
               </div>
             </div>
-            <div>
-              <StyledDropdown
-                value={reportRange}
-                onChange={setReportRange}
-                options={[
-                  { value: 'LAST_7_DAYS', label: 'Últimos 7 días' },
-                  { value: 'LAST_14_DAYS', label: 'Últimos 14 días' },
-                  { value: 'LAST_30_DAYS', label: 'Últimos 30 días' },
-                  { value: 'LAST_6_MONTHS', label: 'Últimos 6 meses' },
-                  { value: 'LAST_12_MONTHS', label: 'Últimos 12 meses' },
-                  { value: 'THIS_YEAR', label: 'Este año' },
-                  { value: 'ALL_TIME', label: 'Histórico completo' }
-                ]}
-              />
-            </div>
-            <p className="mt-2 text-xs font-semibold text-slate-500">Seleccionado: {reportRangeLabelMap[reportRange] || 'Personalizado'}</p>
+            <StyledDropdown
+              value={reportRange}
+              onChange={setReportRange}
+              options={[
+                { value: 'LAST_7_DAYS', label: 'Últimos 7 días' },
+                { value: 'LAST_14_DAYS', label: 'Últimos 14 días' },
+                { value: 'LAST_30_DAYS', label: 'Últimos 30 días' },
+                { value: 'LAST_6_MONTHS', label: 'Últimos 6 meses' },
+                { value: 'LAST_12_MONTHS', label: 'Últimos 12 meses' },
+                { value: 'THIS_YEAR', label: 'Este año' },
+                { value: 'ALL_TIME', label: 'Histórico completo' }
+              ]}
+            />
+            <p className="mt-2 text-xs font-semibold text-slate-500 truncate">
+              Seleccionado: {reportRangeLabelMap[reportRange] || 'Personalizado'}
+            </p>
           </div>
-          <div className="flex flex-row gap-3">
+          
+          {/* Action Buttons - Full width on mobile, stacked on tablet, side by side on desktop */}
+          <div className="flex flex-col sm:flex-row md:flex-col xl:flex-row gap-2 md:col-span-2 xl:col-span-2">
             <button 
               onClick={() => setShowHistoryModal(true)}
-              className="btn-secondary h-[46px] whitespace-nowrap"
+              className="btn-secondary h-[46px] whitespace-nowrap flex-1 flex items-center justify-center gap-2"
             >
               <History size={18} />
-              Historial de Ventas
+              <span>Historial de Ventas</span>
             </button>
-            <button className="btn-primary h-[46px] whitespace-nowrap">
+            <button className="btn-primary h-[46px] whitespace-nowrap flex-1 flex items-center justify-center gap-2">
               <Download size={18} />
-              Exportar PDF
+              <span>Exportar PDF</span>
             </button>
           </div>
         </div>
