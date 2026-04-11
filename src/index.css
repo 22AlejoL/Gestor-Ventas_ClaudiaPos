@@ -74,3 +74,15 @@
 		@apply px-6 py-4;
 	}
 }
+
+/* Print styles - hide UI elements when printing receipts */
+@media print {
+	/* When printing a receipt, hide all app chrome */
+	.printing-receipt aside,
+	.printing-receipt header,
+	.printing-receipt .fixed,
+	.printing-receipt .surface-panel,
+	.printing-receipt nav {
+		display: none !important;
+	}
+}

@@ -1,12 +1,15 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Business, Product, Sale, User } from './types';
+import { Business, Product, Sale, User, CashRegisterOpening, CashRegisterClosure } from './types';
 import { api } from './services/api';
 import { supabase } from './lib/supabase';
 
 // Layout & Common
 import Layout from './components/layout/Layout';
 import ConfigurationView from './components/common/ConfigurationView';
+import OpenCashRegisterModal from './components/common/OpenCashRegisterModal';
+import CloseCashRegisterModal from './components/common/CloseCashRegisterModal';
+import CashClosureReceipt from './components/common/CashClosureReceipt';
 
 const Landing = lazy(() => import('./pages/Landing'));
 const Login = lazy(() => import('./pages/Login'));
@@ -52,6 +55,15 @@ export default function App() {
   const [ownerBusinesses, setOwnerBusinesses] = useState<Business[]>([]);
   const [selectedOwnerBusiness, setSelectedOwnerBusiness] = useState<string>('ALL');
   const [loadingAuth, setLoadingAuth] = useState(true);
+  
+  // Cash Register states
+  const [cashOpening, setCashOpening] = useState<CashRegisterOpening | null | undefined>(undefined);
+  const [cashClosure, setCashClosure] = useState<CashRegisterClosure | null>(null);
+  const [showOpeningModal, setShowOpeningModal] = useState(false);
+  const [showClosingModal, setShowClosingModal] = useState(false);
+  const [closureReceipt, setClosureReceipt] = useState<CashRegisterClosure | null>(null);
+  const [requireCashOpening, setRequireCashOpening] = useState(false);
+  const closureReceiptRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Initial fetch of session
@@ -96,7 +108,8 @@ export default function App() {
         avatar: profile.avatar
       };
       setUser(nextUser);
-      fetchData(nextUser); // Fetch products and sales after login
+      await fetchData(nextUser); // Fetch products and sales after login
+      await checkCashOpening(nextUser); // Check cash opening for sellers
     }
     setLoadingAuth(false);
   };
@@ -198,6 +211,170 @@ export default function App() {
     await supabase.auth.signOut();
   };
 
+  // Check if seller has opened cash register today
+  const checkCashOpening = async (activeUser: User) => {
+    if (activeUser.role !== 'SELLER') {
+      setCashOpening(null);
+      setCashClosure(null);
+      setRequireCashOpening(false);
+      return;
+    }
+
+    try {
+      const [opening, closure] = await Promise.all([
+        api.getTodayOpening(activeUser.id, activeUser.businessId),
+        api.getTodayClosure(activeUser.id)
+      ]);
+      setCashOpening(opening);
+      setCashClosure(closure);
+      // Require opening if no opening exists
+      const needsOpening = !opening;
+      setRequireCashOpening(needsOpening);
+      setShowOpeningModal(needsOpening);
+    } catch (error) {
+      console.error('Error checking cash opening:', error);
+      setCashOpening(null);
+      setCashClosure(null);
+      setRequireCashOpening(true);
+      setShowOpeningModal(true);
+    }
+  };
+
+  const handleCreateOpening = async (initialAmount: number) => {
+    if (!user) return;
+
+    try {
+      const newOpening = await api.createOpening({
+        sellerId: user.id,
+        sellerName: user.name,
+        businessId: user.businessId,
+        date: new Date().toISOString().split('T')[0],
+        initialAmount
+      });
+      setCashOpening(newOpening);
+      setRequireCashOpening(false);
+      setShowOpeningModal(false);
+    } catch (error) {
+      console.error('Error creating opening:', error);
+      throw error;
+    }
+  };
+
+  const handleReopenShift = () => {
+    // Allow opening a new shift even if one was already closed today
+    setCashClosure(null);
+    setRequireCashOpening(true);
+    setShowOpeningModal(true);
+  };
+
+  const handleCloseShift = async (data: { finalAmount: number; expenses: number; expensesDetails: string }) => {
+    if (!user || !cashOpening) return;
+
+    try {
+      // Calculate payment breakdown from today's sales
+      const today = new Date().toISOString().split('T')[0];
+      const todaySales = sales.filter(sale => {
+        const saleDate = sale.date.split('T')[0];
+        return saleDate === today && sale.sellerId === user.id;
+      });
+
+      const paymentBreakdown = todaySales.reduce(
+        (acc, sale) => {
+          acc[sale.paymentMethod.toLowerCase() as 'cash' | 'card' | 'digital'] += sale.total;
+          return acc;
+        },
+        { cash: 0, card: 0, digital: 0 }
+      );
+
+      const totalSales = todaySales.reduce((sum, sale) => sum + sale.total, 0);
+      // Correct calculation: difference is final - initial (expenses are already reflected in final amount)
+      const difference = data.finalAmount - cashOpening.initialAmount;
+
+      const closure = await api.createClosure({
+        sellerId: user.id,
+        sellerName: user.name,
+        businessId: user.businessId,
+        date: today,
+        openingId: cashOpening.id,
+        initialAmount: cashOpening.initialAmount,
+        finalAmount: data.finalAmount,
+        expenses: data.expenses,
+        expensesDetails: data.expensesDetails,
+        difference,
+        paymentBreakdown,
+        totalSales
+      });
+
+      setCashClosure(closure);
+      setClosureReceipt(closure);
+      setShowClosingModal(false);
+    } catch (error) {
+      console.error('Error creating closure:', error);
+      throw error;
+    }
+  };
+
+  const handlePrintReceipt = () => {
+    // Add a class to body for print-specific styling
+    document.body.classList.add('printing-receipt');
+
+    // Find the receipt element and clone it for printing
+    const receiptElement = closureReceiptRef.current;
+    if (receiptElement) {
+      // Create a print window
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        const receiptHTML = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Ticket de Cierre - ${user?.name || 'Vendedor'}</title>
+            <style>
+              @media print {
+                body { margin: 0; padding: 10px; font-family: monospace; }
+                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+              }
+              body {
+                font-family: 'Courier New', Courier, monospace;
+                font-size: 12px;
+                line-height: 1.4;
+                max-width: 300px;
+                margin: 0 auto;
+                padding: 10px;
+              }
+              .header { text-align: center; border-bottom: 2px dashed #ccc; padding-bottom: 10px; margin-bottom: 10px; }
+              .header h1 { font-size: 16px; margin: 0; font-weight: bold; }
+              .header p { margin: 3px 0; }
+              .section { margin-bottom: 10px; }
+              .section-title { font-weight: bold; margin-bottom: 5px; }
+              .row { display: flex; justify-content: space-between; margin: 3px 0; }
+              .total { border-top: 1px solid #ccc; padding-top: 5px; margin-top: 5px; font-weight: bold; }
+              .difference { padding: 8px; margin: 10px 0; text-align: center; border-radius: 4px; }
+              .difference.positive { background: #d1fae5; }
+              .difference.negative { background: #fee2e2; }
+              .difference.positive .amount { color: #065f46; }
+              .difference.negative .amount { color: #991b1b; }
+              .footer { text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #ccc; font-size: 10px; color: #666; }
+            </style>
+          </head>
+          <body>
+            ${receiptElement.innerHTML}
+          </body>
+          </html>
+        `;
+        printWindow.document.write(receiptHTML);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 250);
+      }
+    }
+
+    document.body.classList.remove('printing-receipt');
+  };
+
   if (loadingAuth) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
@@ -225,7 +402,81 @@ export default function App() {
 
   return (
     <Router>
-      <Layout user={user} onLogout={handleLogout}>
+      {/* Cash Register Opening Modal for Sellers */}
+      {showOpeningModal && user?.role === 'SELLER' && (
+        <OpenCashRegisterModal
+          sellerName={user.name}
+          businessName={user.businessName}
+          existingOpening={cashOpening || null}
+          onSubmit={handleCreateOpening}
+          onCancel={() => setShowOpeningModal(false)}
+          requireOpening={requireCashOpening}
+        />
+      )}
+
+      {/* Cash Register Closing Modal for Sellers */}
+      {showClosingModal && user?.role === 'SELLER' && cashOpening && (
+        <CloseCashRegisterModal
+          sellerName={user.name}
+          businessName={user.businessName}
+          opening={cashOpening}
+          todaySales={sales.filter(sale => {
+            const today = new Date().toISOString().split('T')[0];
+            const saleDate = sale.date.split('T')[0];
+            return saleDate === today && sale.sellerId === user.id;
+          })}
+          onSubmit={handleCloseShift}
+          onCancel={() => setShowClosingModal(false)}
+        />
+      )}
+
+      {/* Closure Receipt Modal */}
+      {closureReceipt && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 print:hidden">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
+            <div className="p-4 bg-emerald-50 border-b border-emerald-100 flex justify-between items-center flex-shrink-0">
+              <h3 className="font-bold text-emerald-800">Cierre Completado</h3>
+              <button
+                onClick={() => setClosureReceipt(null)}
+                className="text-emerald-600 hover:text-emerald-800 p-1"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6" id="closure-receipt-container">
+              <CashClosureReceipt
+                ref={closureReceiptRef}
+                closure={closureReceipt}
+                sellerName={user?.name || ''}
+                businessName={user?.businessName}
+              />
+            </div>
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2 flex-shrink-0">
+              <button
+                onClick={() => setClosureReceipt(null)}
+                className="flex-1 btn-secondary py-3 text-sm sm:text-base"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={handlePrintReceipt}
+                className="flex-1 btn-primary py-3 text-sm sm:text-base"
+              >
+                Imprimir Ticket
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Layout
+        user={user}
+        onLogout={handleLogout}
+        onCloseShift={() => setShowClosingModal(true)}
+        onReopenShift={user.role === 'SELLER' ? handleReopenShift : undefined}
+        hasOpenedShift={!!cashOpening}
+        hasClosedShift={!!cashClosure}
+      >
         <Suspense fallback={<RouteLoading />}>
           <Routes>
             {/* Seller Routes */}

@@ -14,7 +14,9 @@ import {
   Clock, 
   Bell, 
   HelpCircle,
-  UserCircle2
+  UserCircle2,
+  Power,
+  Store
 } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
 import { User, UserRole } from '../../types';
@@ -24,6 +26,10 @@ interface LayoutProps {
   user: User;
   children: React.ReactNode;
   onLogout: () => void | Promise<void>;
+  onCloseShift?: () => void;
+  onReopenShift?: () => void;
+  hasOpenedShift?: boolean;
+  hasClosedShift?: boolean;
 }
 
 interface MenuItem {
@@ -41,7 +47,7 @@ interface NotificationItem {
 
 type HeaderPanel = 'notifications' | 'help' | 'profile' | null;
 
-const Layout = ({ user, children, onLogout }: LayoutProps) => {
+const Layout = ({ user, children, onLogout, onCloseShift, onReopenShift, hasOpenedShift, hasClosedShift }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activePanel, setActivePanel] = useState<HeaderPanel>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => [
@@ -193,6 +199,28 @@ const Layout = ({ user, children, onLogout }: LayoutProps) => {
             >
               <Menu size={24} />
             </button>
+            
+            {/* Shift Buttons - Only for SELLERS */}
+            {user.role === 'SELLER' && onCloseShift && hasOpenedShift && !hasClosedShift && (
+              <button
+                onClick={onCloseShift}
+                className="hidden md:flex items-center gap-2 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all border border-rose-200 font-medium text-sm"
+              >
+                <Power size={16} />
+                Cerrar Turno
+              </button>
+            )}
+            
+            {user.role === 'SELLER' && hasClosedShift && onReopenShift && (
+              <button
+                onClick={onReopenShift}
+                className="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-xl transition-all border border-emerald-200 font-medium text-sm"
+              >
+                <Store size={16} />
+                Abrir Nuevo Turno
+              </button>
+            )}
+            
             <h1 className="text-xl font-bold text-slate-800">
               {currentMenu.find((m) => m.path === location.pathname)?.label || 'Inicio'}
             </h1>
