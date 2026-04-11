@@ -1,10 +1,15 @@
 import React from 'react';
-import { Download, ArrowUpRight, ArrowDownRight, History, CalendarDays, BarChart3, Calendar } from 'lucide-react';
+import { Download, ArrowUpRight, ArrowDownRight, History, CalendarDays, BarChart3 } from 'lucide-react';
 import { Business, Sale } from '../types';
 import SalesHistoryModal from '../components/common/SalesHistoryModal';
 import BusinessScopePicker from '../components/common/BusinessScopePicker';
 import StyledDropdown from '../components/common/StyledDropdown';
-import DailyReport from '../components/common/DailyReport';
+import { 
+  getBogotaDate,
+  getRelativeDateBogota,
+  formatBogotaDate,
+  getShortMonthBogota
+} from '../lib/date-utils';
 import { 
   LineChart, 
   Line, 
@@ -27,14 +32,16 @@ interface OwnerReportsProps {
 
 const OwnerReports = ({ sales, businesses, selectedBusiness, onSelectBusiness }: OwnerReportsProps) => {
   const [showHistoryModal, setShowHistoryModal] = React.useState(false);
-  const [reportRange, setReportRange] = React.useState('LAST_6_MONTHS');
-  const [activeTab, setActiveTab] = React.useState<'general' | 'daily'>('general');
+  const [reportRange, setReportRange] = React.useState('LAST_30_DAYS');
 
   const reportRangeLabelMap: Record<string, string> = {
-    LAST_6_MONTHS: 'Ultimos 6 meses',
-    LAST_12_MONTHS: 'Ultimos 12 meses',
-    THIS_YEAR: 'Este ano',
-    ALL_TIME: 'Historico completo'
+    LAST_7_DAYS: 'Últimos 7 días',
+    LAST_14_DAYS: 'Últimos 14 días',
+    LAST_30_DAYS: 'Últimos 30 días',
+    LAST_6_MONTHS: 'Últimos 6 meses',
+    LAST_12_MONTHS: 'Últimos 12 meses',
+    THIS_YEAR: 'Este año',
+    ALL_TIME: 'Histórico completo'
   };
 
   const salesByBusiness = React.useMemo(() => {
@@ -43,52 +50,48 @@ const OwnerReports = ({ sales, businesses, selectedBusiness, onSelectBusiness }:
   }, [sales, selectedBusiness]);
 
   const visibleSales = React.useMemo(() => {
-    const now = new Date();
-
-    const startOfRange = new Date(now);
-    if (reportRange === 'LAST_6_MONTHS') {
-      startOfRange.setMonth(startOfRange.getMonth() - 5);
-      startOfRange.setDate(1);
-    }
-    if (reportRange === 'LAST_12_MONTHS') {
-      startOfRange.setMonth(startOfRange.getMonth() - 11);
-      startOfRange.setDate(1);
-    }
+    const now = getBogotaDate();
 
     return salesByBusiness.filter((sale) => {
       const saleDate = new Date(sale.date);
+      
+      if (reportRange === 'LAST_7_DAYS') {
+        const startDate = getRelativeDateBogota(-7);
+        return saleDate >= startDate;
+      }
+      if (reportRange === 'LAST_14_DAYS') {
+        const startDate = getRelativeDateBogota(-14);
+        return saleDate >= startDate;
+      }
+      if (reportRange === 'LAST_30_DAYS') {
+        const startDate = getRelativeDateBogota(-30);
+        return saleDate >= startDate;
+      }
+      if (reportRange === 'LAST_6_MONTHS') {
+        const startDate = new Date(now);
+        startDate.setMonth(startDate.getMonth() - 5);
+        startDate.setDate(1);
+        return saleDate >= startDate;
+      }
+      if (reportRange === 'LAST_12_MONTHS') {
+        const startDate = new Date(now);
+        startDate.setMonth(startDate.getMonth() - 11);
+        startDate.setDate(1);
+        return saleDate >= startDate;
+      }
       if (reportRange === 'THIS_YEAR') {
         return saleDate.getFullYear() === now.getFullYear();
       }
       if (reportRange === 'ALL_TIME') {
         return true;
       }
-      return saleDate >= startOfRange;
+      return true;
     });
   }, [salesByBusiness, reportRange]);
 
   // Dynamic calculations based on real sales data
   const { data, pieData, metrics } = React.useMemo(() => {
-    // 1. Calculate Monthly Cash Flow based on selected range
-    const monthWindow = reportRange === 'THIS_YEAR'
-      ? new Date().getMonth() + 1
-      : reportRange === 'LAST_12_MONTHS' || reportRange === 'ALL_TIME'
-        ? 12
-        : 6;
-
-    const cashFlowMonths = Array.from({ length: monthWindow }).map((_, i) => {
-      const d = new Date();
-      d.setMonth(d.getMonth() - (monthWindow - 1 - i));
-      return { 
-        name: d.toLocaleString('es-ES', { month: 'short' }).replace(/^\w/, c => c.toUpperCase()), 
-        month: d.getMonth(), 
-        year: d.getFullYear(),
-        ventas: 0,
-        meta: 0
-      };
-    });
-
-    // 2. Setup Payment Methods mapping
+    // Setup Payment Methods mapping
     const methodsMap: Record<string, { value: number, color: string }> = {
       'CASH': { value: 0, color: '#4f46e5' },
       'CARD': { value: 0, color: '#818cf8' },
@@ -98,34 +101,94 @@ const OwnerReports = ({ sales, businesses, selectedBusiness, onSelectBusiness }:
     let totalRevenue = 0;
     let totalItems = 0;
 
-    visibleSales.forEach(sale => {
-      const saleDate = new Date(sale.date);
-      const saleMonth = saleDate.getMonth();
-      const saleYear = saleDate.getFullYear();
+    // Para rangos de días, agrupar por día; para meses, agrupar por mes
+    const isDayRange = reportRange === 'LAST_7_DAYS' || reportRange === 'LAST_14_DAYS' || reportRange === 'LAST_30_DAYS';
+    
+    let timeSeriesData: any[] = [];
 
-      // Flujo de Caja
-      const monthObj = cashFlowMonths.find(m => m.month === saleMonth && m.year === saleYear);
-      if (monthObj) {
-        monthObj.ventas += sale.total;
-      }
+    if (isDayRange) {
+      // Calcular número de días basado en el rango
+      let days = 30;
+      if (reportRange === 'LAST_7_DAYS') days = 7;
+      if (reportRange === 'LAST_14_DAYS') days = 14;
+      if (reportRange === 'LAST_30_DAYS') days = 30;
 
-      // Metodos de pago
-      if (methodsMap[sale.paymentMethod]) {
-        methodsMap[sale.paymentMethod].value += sale.total;
-      }
-
-      // Metrics
-      totalRevenue += sale.total;
-      sale.items?.forEach(item => {
-        totalItems += item.quantity;
+      // Generar datos para cada día
+      timeSeriesData = Array.from({ length: days }).map((_, i) => {
+        const date = getRelativeDateBogota(-(days - 1 - i));
+        return {
+          name: getShortMonthBogota(date) + ' ' + date.getDate(),
+          fullDate: formatBogotaDate(date, { weekday: 'long', day: 'numeric', month: 'long' }),
+          date: date,
+          ventas: 0,
+          meta: 0
+        };
       });
-    });
 
-    // Añadir una línea de "meta" dinámica (e.j., 20% más que las ventas o mínimo 1000)
-    cashFlowMonths.forEach(m => m.meta = Math.max(1000, m.ventas * 1.2));
+      // Agregar ventas a los días correspondientes
+      visibleSales.forEach(sale => {
+        const saleDate = new Date(sale.date);
+        const dayObj = timeSeriesData.find(d => isSameDayBogota(d.date, saleDate));
+        if (dayObj) {
+          dayObj.ventas += sale.total;
+        }
+
+        if (methodsMap[sale.paymentMethod]) {
+          methodsMap[sale.paymentMethod].value += sale.total;
+        }
+
+        totalRevenue += sale.total;
+        sale.items?.forEach(item => {
+          totalItems += item.quantity;
+        });
+      });
+    } else {
+      // Para rangos de meses, mantener el comportamiento original
+      const monthWindow = reportRange === 'THIS_YEAR'
+        ? getBogotaDate().getMonth() + 1
+        : reportRange === 'LAST_12_MONTHS' || reportRange === 'ALL_TIME'
+          ? 12
+          : 6;
+
+      timeSeriesData = Array.from({ length: monthWindow }).map((_, i) => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - (monthWindow - 1 - i));
+        return { 
+          name: d.toLocaleString('es-ES', { month: 'short', timeZone: 'America/Bogota' }).replace(/^\w/, c => c.toUpperCase()), 
+          fullDate: d.toLocaleString('es-ES', { month: 'long', year: 'numeric', timeZone: 'America/Bogota' }),
+          month: d.getMonth(), 
+          year: d.getFullYear(),
+          ventas: 0,
+          meta: 0
+        };
+      });
+
+      visibleSales.forEach(sale => {
+        const saleDate = new Date(sale.date);
+        const saleMonth = saleDate.getMonth();
+        const saleYear = saleDate.getFullYear();
+
+        const monthObj = timeSeriesData.find(m => m.month === saleMonth && m.year === saleYear);
+        if (monthObj) {
+          monthObj.ventas += sale.total;
+        }
+
+        if (methodsMap[sale.paymentMethod]) {
+          methodsMap[sale.paymentMethod].value += sale.total;
+        }
+
+        totalRevenue += sale.total;
+        sale.items?.forEach(item => {
+          totalItems += item.quantity;
+        });
+      });
+    }
+
+    // Añadir línea de meta dinámica
+    timeSeriesData.forEach((m: any) => m.meta = Math.max(1000, m.ventas * 1.2));
 
     const pieFormatted = [
-      { name: 'Efectivo', value: methodsMap.CASH.value || 1, color: methodsMap.CASH.color }, // fallback to 1 so pie chart draws something if empty
+      { name: 'Efectivo', value: methodsMap.CASH.value || 1, color: methodsMap.CASH.color },
       { name: 'Tarjeta', value: methodsMap.CARD.value || 1, color: methodsMap.CARD.color },
       { name: 'Digital', value: methodsMap.DIGITAL.value || 1, color: methodsMap.DIGITAL.color }
     ];
@@ -133,7 +196,7 @@ const OwnerReports = ({ sales, businesses, selectedBusiness, onSelectBusiness }:
     const totalPie = pieFormatted.reduce((acc, curr) => acc + curr.value, 0);
 
     return {
-      data: cashFlowMonths,
+      data: timeSeriesData,
       pieData: pieFormatted,
       metrics: {
         totalRevenue,
@@ -145,53 +208,32 @@ const OwnerReports = ({ sales, businesses, selectedBusiness, onSelectBusiness }:
     };
   }, [visibleSales, reportRange]);
 
+  // Helper para comparar días en Bogotá
+  const isSameDayBogota = (date1: Date, date2: Date): boolean => {
+    const bogota1 = date1.toLocaleDateString('en-US', { timeZone: 'America/Bogota' });
+    const bogota2 = date2.toLocaleDateString('en-US', { timeZone: 'America/Bogota' });
+    return bogota1 === bogota2;
+  };
+
   return (
     <div className="space-y-6">
-      {/* Tabs de navegación */}
-      <div className="flex items-center gap-2 border-b border-slate-200">
-        <button
-          onClick={() => setActiveTab('general')}
-          className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-colors border-b-2 ${
-            activeTab === 'general'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <BarChart3 size={18} />
-          General
-        </button>
-        <button
-          onClick={() => setActiveTab('daily')}
-          className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-colors border-b-2 ${
-            activeTab === 'daily'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <Calendar size={18} />
-          Ingreso Diario
-        </button>
-      </div>
-
-      {activeTab === 'general' ? (
-        <>
-          <div className="flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
-            <div className="xl:min-h-[166px] flex flex-col justify-center">
-              <h2 className="section-title">Reportes de Rendimiento</h2>
-              <p className="section-subtitle">Análisis detallado de ventas y rentabilidad basado en registros reales</p>
-            </div>
-            <div className="flex gap-3 items-center flex-wrap justify-start xl:justify-end">
-          <div className="w-full md:w-auto min-w-[320px]">
+      <div className="flex flex-col xl:flex-row xl:justify-between xl:items-start gap-4">
+        <div className="flex-shrink-0">
+          <h2 className="section-title">Reportes de Rendimiento</h2>
+          <p className="section-subtitle">Análisis detallado de ventas y rentabilidad basado en registros reales</p>
+        </div>
+        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-start">
+          <div className="w-full lg:w-auto min-w-[280px] lg:min-w-[320px]">
             <BusinessScopePicker
               businesses={businesses}
               selectedBusiness={selectedBusiness}
               onSelectBusiness={onSelectBusiness}
               title="Vista de empresas"
               allLabel="Consolidado Global"
-              className="h-[166px]"
+              className="h-auto lg:h-[166px]"
             />
           </div>
-          <div className="surface-card p-4 min-w-[320px] h-[166px]">
+          <div className="surface-card p-4 min-w-[280px] lg:min-w-[320px]">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <p className="text-xs uppercase tracking-wider text-slate-400 font-bold">Periodo del reporte</p>
@@ -205,6 +247,9 @@ const OwnerReports = ({ sales, businesses, selectedBusiness, onSelectBusiness }:
                 value={reportRange}
                 onChange={setReportRange}
                 options={[
+                  { value: 'LAST_7_DAYS', label: 'Últimos 7 días' },
+                  { value: 'LAST_14_DAYS', label: 'Últimos 14 días' },
+                  { value: 'LAST_30_DAYS', label: 'Últimos 30 días' },
                   { value: 'LAST_6_MONTHS', label: 'Últimos 6 meses' },
                   { value: 'LAST_12_MONTHS', label: 'Últimos 12 meses' },
                   { value: 'THIS_YEAR', label: 'Este año' },
@@ -214,23 +259,29 @@ const OwnerReports = ({ sales, businesses, selectedBusiness, onSelectBusiness }:
             </div>
             <p className="mt-2 text-xs font-semibold text-slate-500">Seleccionado: {reportRangeLabelMap[reportRange] || 'Personalizado'}</p>
           </div>
-          <button 
-            onClick={() => setShowHistoryModal(true)}
-            className="btn-secondary h-[46px]"
-          >
-            <History size={18} />
-            Historial de Ventas
-          </button>
-          <button className="btn-primary h-[46px]">
-            <Download size={18} />
-            Exportar PDF
-          </button>
+          <div className="flex flex-row gap-3">
+            <button 
+              onClick={() => setShowHistoryModal(true)}
+              className="btn-secondary h-[46px] whitespace-nowrap"
+            >
+              <History size={18} />
+              Historial de Ventas
+            </button>
+            <button className="btn-primary h-[46px] whitespace-nowrap">
+              <Download size={18} />
+              Exportar PDF
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 surface-panel p-6">
-          <h3 className="font-bold text-slate-800 mb-6">Flujo de Caja Mensual</h3>
+          <h3 className="font-bold text-slate-800 mb-6">
+            {reportRange === 'LAST_7_DAYS' || reportRange === 'LAST_14_DAYS' || reportRange === 'LAST_30_DAYS' 
+              ? 'Flujo de Caja Diario' 
+              : 'Flujo de Caja Mensual'}
+          </h3>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data}>
@@ -240,6 +291,12 @@ const OwnerReports = ({ sales, businesses, selectedBusiness, onSelectBusiness }:
                 <Tooltip 
                   contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
                   formatter={(value: number) => [`$${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`]}
+                  labelFormatter={(label, payload) => {
+                    if (payload && payload.length > 0 && payload[0].payload.fullDate) {
+                      return payload[0].payload.fullDate;
+                    }
+                    return label;
+                  }}
                 />
                 <Line type="monotone" dataKey="ventas" name="Ventas Reales" stroke="#4f46e5" strokeWidth={3} dot={{r: 4, fill: '#4f46e5'}} activeDot={{r: 6}} />
                 <Line type="monotone" dataKey="meta" name="Meta (Ref)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={false} />
@@ -317,20 +374,12 @@ const OwnerReports = ({ sales, businesses, selectedBusiness, onSelectBusiness }:
         </div>
       </div>
 
-          {showHistoryModal && (
-            <SalesHistoryModal 
-              sales={visibleSales} 
-              role="OWNER" 
-              businesses={businesses}
-              onClose={() => setShowHistoryModal(false)} 
-            />
-          )}
-        </>
-      ) : (
-        <DailyReport 
-          sales={salesByBusiness}
-          role="OWNER"
+      {showHistoryModal && (
+        <SalesHistoryModal 
+          sales={visibleSales} 
+          role="OWNER" 
           businesses={businesses}
+          onClose={() => setShowHistoryModal(false)} 
         />
       )}
     </div>

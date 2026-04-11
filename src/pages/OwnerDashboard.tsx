@@ -13,6 +13,12 @@ import StatCard from '../components/common/StatCard';
 import { Product, Sale, Business } from '../types';
 import { cn } from '../lib/utils';
 import BusinessScopePicker from '../components/common/BusinessScopePicker';
+import {
+  getBogotaDate,
+  getRelativeDateBogota,
+  formatBogotaDate,
+  isSameDayBogota
+} from '../lib/date-utils';
 
 interface OwnerDashboardProps {
   products: Product[];
@@ -63,27 +69,24 @@ const OwnerDashboard = ({ products, sales, businesses, selectedBusiness, onSelec
     return { totalRevenue, netProfit, lowStockProducts };
   }, [filteredSales, filteredProducts, products]);
 
-  // Chart Data: Dynamic days range including today
+  // Chart Data: Dynamic days range including today using Bogota timezone
   const chartData = useMemo(() => {
     const days = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
     const data = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getBogotaDate();
 
     // Generate days based on selected range
     for (let i = dayRange - 1; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
+      const date = getRelativeDateBogota(-i);
 
       const dayName = days[date.getDay()];
-      const dateStr = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+      const dateStr = formatBogotaDate(date, { day: 'numeric', month: 'long', year: 'numeric' });
 
       // Calculate total sales for this day
       const dayTotal = filteredSales.reduce((sum, sale) => {
         const saleDate = new Date(sale.date);
-        saleDate.setHours(0, 0, 0, 0);
 
-        if (saleDate.getTime() === date.getTime()) {
+        if (isSameDayBogota(saleDate, date)) {
           return sum + sale.total;
         }
         return sum;

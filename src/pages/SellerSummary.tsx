@@ -1,10 +1,15 @@
 import React, { useMemo } from 'react';
-import { DollarSign, ShoppingCart, TrendingUp, Printer, UserCheck, Wallet, CreditCard, Smartphone, History, LayoutDashboard, Calendar, ChevronRight } from 'lucide-react';
+import { DollarSign, ShoppingCart, TrendingUp, Printer, UserCheck, Wallet, CreditCard, Smartphone, History, LayoutDashboard, ChevronRight } from 'lucide-react';
 import StatCard from '../components/common/StatCard';
 import { Sale, UserRole } from '../types';
 import SalesHistoryModal from '../components/common/SalesHistoryModal';
-import DailyReport from '../components/common/DailyReport';
 import { cn } from '../lib/utils';
+import {
+  getBogotaDate,
+  formatBogotaDate,
+  isSameDayBogota,
+  getRelativeDateBogota
+} from '../lib/date-utils';
 
 interface SellerSummaryProps {
   sales: Sale[];
@@ -14,12 +19,11 @@ interface SellerSummaryProps {
 
 const SellerSummary = ({ sales, role, sellerId }: SellerSummaryProps) => {
   const [showHistoryModal, setShowHistoryModal] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState<'resumen' | 'diario'>('resumen');
-  const [expandedDays, setExpandedDays] = React.useState<string[]>([new Date().toISOString().split('T')[0]]);
+  const [expandedDays, setExpandedDays] = React.useState<string[]>([getBogotaDate().toISOString().split('T')[0]]);
 
-  // Get current date formatted
-  const currentDate = new Date();
-  const formattedDate = currentDate.toLocaleDateString('es-ES', {
+  // Get current date formatted in Bogota timezone
+  const currentDate = getBogotaDate();
+  const formattedDate = formatBogotaDate(currentDate, {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -58,13 +62,12 @@ const SellerSummary = ({ sales, role, sellerId }: SellerSummaryProps) => {
       }));
   }, [sales]);
 
-  // Today's sales
-  const todayKey = new Date().toISOString().split('T')[0];
+  // Today's sales using Bogota timezone
+  const todayKey = getBogotaDate().toISOString().split('T')[0];
   const todayStats = salesByDay.find(d => d.date === todayKey) || { total: 0, count: 0, sales: [] };
 
-  // Yesterday's sales for comparison
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
+  // Yesterday's sales for comparison using Bogota timezone
+  const yesterday = getRelativeDateBogota(-1);
   const yesterdayKey = yesterday.toISOString().split('T')[0];
   const yesterdayStats = salesByDay.find(d => d.date === yesterdayKey) || { total: 0, count: 0 };
 
@@ -77,15 +80,14 @@ const SellerSummary = ({ sales, role, sellerId }: SellerSummaryProps) => {
   };
 
   function formatDateLabel(dateStr: string): string {
-    const date = new Date(dateStr + 'T00:00:00');
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
+    const date = new Date(dateStr + 'T00:00:00-05:00'); // Interpretar como hora de Bogotá
+    const today = getBogotaDate();
+    const yesterday = getRelativeDateBogota(-1);
 
-    if (date.toDateString() === today.toDateString()) return 'Hoy';
-    if (date.toDateString() === yesterday.toDateString()) return 'Ayer';
+    if (isSameDayBogota(date, today)) return 'Hoy';
+    if (isSameDayBogota(date, yesterday)) return 'Ayer';
     
-    return date.toLocaleDateString('es-ES', {
+    return formatBogotaDate(date, {
       weekday: 'long',
       day: 'numeric',
       month: 'long'
@@ -94,87 +96,59 @@ const SellerSummary = ({ sales, role, sellerId }: SellerSummaryProps) => {
 
   return (
     <div className="space-y-6">
-      {/* Tabs de navegación */}
-      <div className="flex items-center gap-2 border-b border-slate-200">
-        <button
-          onClick={() => setActiveTab('resumen')}
-          className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-colors border-b-2 ${
-            activeTab === 'resumen'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <LayoutDashboard size={18} />
-          Resumen
-        </button>
-        <button
-          onClick={() => setActiveTab('diario')}
-          className={`flex items-center gap-2 px-6 py-4 font-medium text-sm transition-colors border-b-2 ${
-            activeTab === 'diario'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <Calendar size={18} />
-          Ingreso Diario
-        </button>
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+        <div>
+          <h2 className="section-title">Resumen de mi Turno</h2>
+          <p className="section-subtitle capitalize">{formattedDate}</p>
+        </div>
+        <div className="flex gap-3">
+          <button className="btn-secondary">
+            <Printer size={18} />
+            Imprimir Corte
+          </button>
+          <button className="btn-primary">
+            <UserCheck size={18} />
+            Asistencia
+          </button>
+        </div>
       </div>
 
-      {activeTab === 'resumen' ? (
-        <>
-          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-            <div>
-              <h2 className="section-title">Resumen de mi Turno</h2>
-              <p className="section-subtitle capitalize">{formattedDate}</p>
-            </div>
-            <div className="flex gap-3">
-              <button className="btn-secondary">
-                <Printer size={18} />
-                Imprimir Corte
-              </button>
-              <button className="btn-primary">
-                <UserCheck size={18} />
-                Asistencia
-              </button>
-            </div>
+      {/* Today's Stats */}
+      <div className="bg-indigo-50 rounded-2xl p-5 border border-indigo-100">
+        <h3 className="text-sm font-semibold text-indigo-700 mb-4 flex items-center gap-2">
+          <ShoppingCart size={16} />
+          Ventas de Hoy
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-xl p-4">
+            <p className="text-sm text-slate-500 mb-1">Ventas Hoy</p>
+            <p className="text-2xl font-bold text-slate-800">
+              ${todayStats.total.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+            </p>
+            {yesterdayStats.total > 0 && (
+              <p className={`text-xs mt-1 ${todayStats.total >= yesterdayStats.total ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {todayStats.total >= yesterdayStats.total ? '↑' : '↓'} vs ayer (${yesterdayStats.total.toFixed(2)})
+              </p>
+            )}
           </div>
+          <div className="bg-white rounded-xl p-4">
+            <p className="text-sm text-slate-500 mb-1">Tickets Hoy</p>
+            <p className="text-2xl font-bold text-slate-800">{todayStats.count}</p>
+          </div>
+          <div className="bg-white rounded-xl p-4">
+            <p className="text-sm text-slate-500 mb-1">Ticket Promedio</p>
+            <p className="text-2xl font-bold text-slate-800">
+              ${todayStats.count > 0 ? (todayStats.total / todayStats.count).toFixed(2) : '0.00'}
+            </p>
+          </div>
+        </div>
+      </div>
 
-          {/* Today's Stats */}
-          <div className="bg-indigo-50 rounded-2xl p-5 border border-indigo-100">
-            <h3 className="text-sm font-semibold text-indigo-700 mb-4 flex items-center gap-2">
-              <ShoppingCart size={16} />
-              Ventas de Hoy
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white rounded-xl p-4">
-                <p className="text-sm text-slate-500 mb-1">Ventas Hoy</p>
-                <p className="text-2xl font-bold text-slate-800">
-                  ${todayStats.total.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
-                </p>
-                {yesterdayStats.total > 0 && (
-                  <p className={`text-xs mt-1 ${todayStats.total >= yesterdayStats.total ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {todayStats.total >= yesterdayStats.total ? '↑' : '↓'} vs ayer (${yesterdayStats.total.toFixed(2)})
-                  </p>
-                )}
-              </div>
-              <div className="bg-white rounded-xl p-4">
-                <p className="text-sm text-slate-500 mb-1">Tickets Hoy</p>
-                <p className="text-2xl font-bold text-slate-800">{todayStats.count}</p>
-              </div>
-              <div className="bg-white rounded-xl p-4">
-                <p className="text-sm text-slate-500 mb-1">Ticket Promedio</p>
-                <p className="text-2xl font-bold text-slate-800">
-                  ${todayStats.count > 0 ? (todayStats.total / todayStats.count).toFixed(2) : '0.00'}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <StatCard title="Ventas Totales (Histórico)" value={`$${totalVentas.toLocaleString()}`} icon={DollarSign} color="bg-indigo-600" />
-            <StatCard title="Tickets Emitidos" value={sales.length.toString()} icon={ShoppingCart} color="bg-indigo-600" />
-            <StatCard title="Promedio Ticket" value={`$${ticketPromedio.toFixed(2)}`} icon={TrendingUp} color="bg-indigo-600" />
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <StatCard title="Ventas Totales (Histórico)" value={`$${totalVentas.toLocaleString()}`} icon={DollarSign} color="bg-indigo-600" />
+        <StatCard title="Tickets Emitidos" value={sales.length.toString()} icon={ShoppingCart} color="bg-indigo-600" />
+        <StatCard title="Promedio Ticket" value={`$${ticketPromedio.toFixed(2)}`} icon={TrendingUp} color="bg-indigo-600" />
+      </div>
 
       {/* Sales by Day - Collapsible */}
       <div className="surface-panel overflow-hidden">
@@ -260,7 +234,7 @@ const SellerSummary = ({ sales, role, sellerId }: SellerSummaryProps) => {
                           <tr key={sale.id} className="text-sm border-b border-slate-100 last:border-0">
                             <td className="py-3 font-medium text-slate-700">{sale.id}</td>
                             <td className="py-3 text-slate-500">
-                              {new Date(sale.date).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                              {formatBogotaDate(new Date(sale.date), { hour: '2-digit', minute: '2-digit' })}
                             </td>
                             <td className="py-3">
                               <div className="flex items-center gap-1.5">
@@ -292,20 +266,12 @@ const SellerSummary = ({ sales, role, sellerId }: SellerSummaryProps) => {
         </div>
       </div>
 
-          {showHistoryModal && (
-            <SalesHistoryModal 
-              sales={sales} 
-              role={role} 
-              currentSellerId={sellerId}
-              onClose={() => setShowHistoryModal(false)} 
-            />
-          )}
-        </>
-      ) : (
-        <DailyReport 
-          sales={sales}
-          role={role}
+      {showHistoryModal && (
+        <SalesHistoryModal 
+          sales={sales} 
+          role={role} 
           currentSellerId={sellerId}
+          onClose={() => setShowHistoryModal(false)} 
         />
       )}
     </div>
